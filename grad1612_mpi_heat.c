@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include "mpi.h"
 
 #define NXPROB          10                 /* x dimension of problem grid */
 #define NYPROB          10                 /* y dimension of problem grid */
-#define STEPS           1000               /* number of time steps */
+#define STEPS           1                  /* number of time steps */
 #define MAXWORKER       12                 /* maximum number of worker tasks */
 #define MINWORKER       1                  /* minimum number of worker tasks */
 #define BEGIN           1                  /* message tag */
@@ -19,16 +18,11 @@
 #define GRIDX           2
 #define GRIDY           2
 
-#define SOUTH           0
-#define EAST            1
-#define NORTH           2
-#define WEST            3
-
-#define CONVERGENCE     0
+#define CONVERGENCE     0                    /* 1: On, 0: Off */
 #define INTERVAL	      200		            /* After how many rounds are we checking for convergence */
 #define SENSITIVITY	   0.1		            /* Convergence's sensitivity (EPSILON) */
 
-#define CX              0.1
+#define CX              0.1                  /* Old struct parms */
 #define CY              0.1
 
 /**************************************************************************
@@ -38,12 +32,15 @@ void update(int, int, int, float **, float **);
 void prtdat(int, int, float **, char *);
 /****************************************************************************/
 
+enum coordinates {SOUTH=0, EAST, NORTH, WEST};
+
 int main (void) {
     
    int comm_sz, my_rank, neighBor[4], dims[2], periods[2], *xs, *ys, *xe, *ye, i, j;
    float  **u[2]; /* array for grid */
    MPI_Comm comm2d;
    MPI_Datatype column, row;
+   MPI_Request recvRequest[4], sendRequest[4];
    /* Variables for clock */
    double start_time, end_time, elapsed_time;
 
@@ -102,8 +99,7 @@ int main (void) {
    MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
    MPI_Type_commit(&row);
 
-   /* master's code */
-    if (my_rank == MASTER) {
+   if (my_rank == MASTER) {
       if ((comm_sz > MAXWORKER || comm_sz < MINWORKER) && comm_sz != GRIDX*GRIDY) {
         printf("ERROR: the number of tasks must be between %d and %d.\n Quiting...\n", MINWORKER+1,MAXWORKER+1);
         MPI_Abort(comm2d, 1);
@@ -138,7 +134,6 @@ int main (void) {
          }
       }
    }
-   
 
    MPI_Bcast(xs, comm_sz, MPI_INT, 0, comm2d);
    MPI_Bcast(ys, comm_sz, MPI_INT, 0, comm2d);
@@ -146,6 +141,7 @@ int main (void) {
    MPI_Bcast(ye, comm_sz, MPI_INT, 0, comm2d);
 
    if (my_rank == MASTER) {
+      printf("Initializing grid and writing initial.dat file...\n");
       for (i = 0; i < size_total_x; i++) { 
          for (j = 0; j < size_total_y; j++) {
             u[0][i][j] = i * (size_total_x - i - 1) * j * (size_total_y - j - 1);
@@ -154,22 +150,17 @@ int main (void) {
       }
       prtdat(size_total_x, size_total_y, u[0], "initial.dat");
    }
-   /* worker's code */
    else {
       for (i = 0; i < size_total_x; i++) {
          for (j = 0; j < size_total_y; j++) {
-            if (i>=xs[my_rank] && i<=xe[my_rank]  && j >=ys[my_rank] && j<=ye[my_rank])
-               u[0][i][j] = i * (size_total_x - i - 1) * j * (size_total_y - j - 1);
-            else
-               u[0][i][j] = 0.0;
+            if (i>=xs[my_rank] && i<=xe[my_rank]  && j >=ys[my_rank] && j<=ye[my_rank]) u[0][i][j] = i * (size_total_x - i - 1) * j * (size_total_y - j - 1);
+            else u[0][i][j] = 0.0;
             u[1][i][j] = 0.0;
          }
       }
    }
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
-
-
 
 
    end_time = MPI_Wtime();
