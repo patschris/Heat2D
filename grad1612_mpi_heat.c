@@ -43,6 +43,7 @@ int main (void) {
    int comm_sz, my_rank, neighBor[4], dims[2], periods[2], *xs, *ys, *xe, *ye, i, j;
    float  **u[2]; /* array for grid */
    MPI_Comm comm2d;
+   MPI_Datatype column, row;
    /* Variables for clock */
    double start_time, end_time, elapsed_time;
 
@@ -93,6 +94,13 @@ int main (void) {
     xe = malloc(comm_sz*sizeof(int));
     ys = malloc(comm_sz*sizeof(int));
     ye = malloc(comm_sz*sizeof(int));
+
+   /* Create column data type to communicate with East and West neighBors */
+   MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
+   MPI_Type_commit(&column);
+   /* Create row data type to communicate with North and South neighBors */
+   MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
+   MPI_Type_commit(&row);
 
    /* master's code */
     if (my_rank == MASTER) {
@@ -156,35 +164,32 @@ int main (void) {
             u[1][i][j] = 0.0;
          }
       }
-      char str[12];
-      sprintf(str, "%d.txt", my_rank);
-      prtdat(size_total_x, size_total_y, u[0], str);
    }
    MPI_Barrier(comm2d);
-   /* Starting time */
    start_time = MPI_Wtime();
 
 
 
 
-   /* Ending time */
    end_time = MPI_Wtime();
-   /* Elapsed time */
    elapsed_time = end_time - start_time;
 
+   /* Free all arrays */
+   free(xs);
+   free(ys);
+   free(xe);
+   free(ye);
+   free(u[0][0]);
+   free(u[1][0]);
+   free(u[0]);
+   free(u[1]);
 
-    /* Free all arrays */
-    free(xs);
-    free(ys);
-    free(xe);
-    free(ye);
-    free(u[0][0]);
-    free(u[1][0]);
-    free(u[0]);
-    free(u[1]);
+   /* Free datatypes */
+   MPI_Type_free(&column);
+   MPI_Type_free(&row);
 
-    MPI_Finalize();
-    return 0;
+   MPI_Finalize();
+   return 0;
 }
 
 /**************************************************************************
