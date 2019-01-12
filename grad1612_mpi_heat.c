@@ -138,6 +138,7 @@ int main (void) {
          }
       }
    }
+   
 
    MPI_Bcast(xs, comm_sz, MPI_INT, 0, comm2d);
    MPI_Bcast(ys, comm_sz, MPI_INT, 0, comm2d);
