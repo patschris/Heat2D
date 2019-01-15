@@ -56,8 +56,11 @@ int main(void) {
    neighBor[SOUTH] = neighBor[EAST] = neighBor[NORTH] = neighBor[WEST] = MPI_PROC_NULL;
    /* Find Left/West and Right/East neighBors */
    MPI_Cart_shift(comm2d, 0, 1, &neighBor[WEST], &neighBor[EAST]);
+
    /* Find Bottom/South and Upper/North neighBors */
-   MPI_Cart_shift(comm2d, 1, 1, &neighBor[SOUTH], &neighBor[NORTH]);
+   MPI_Cart_shift(comm2d, 1, 1, &neighBor[NORTH], &neighBor[SOUTH]);
+
+
    printf("I am %d and my neighbors are North=%d, South=%d, East =%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
 
    /* Size of each cell */
@@ -65,8 +68,8 @@ int main(void) {
    int ycell = NYPROB / GRIDY;
 
    /* Size with extra rows and columns */
-   int size_total_x = NXPROB + 2 * GRIDX;
-   int size_total_y = NYPROB + 2 * GRIDY;
+   int size_total_x = NXPROB + 2*GRIDX;
+   int size_total_y = NYPROB + 2*GRIDY;
 
    /* Allocate 2D contiguous arrays u[0] and u[1] (3d u) */
    /* Allocate size_total_x rows */
@@ -146,7 +149,7 @@ int main(void) {
       sprintf(str, "%d.txt", my_rank);
       prtdat(size_total_x, size_total_y, u[0], str);
    }
-   printf("Process %d) LEFT UPPER:(%d,%d), RIGHT UPPER:(%d,%d), LEFT LOWER:(%d,%d), RIGHT LOWER:(%d,%d)\n", 
+   printf("Process %d -> LEFT UPPER:(%d,%d), RIGHT UPPER:(%d,%d), LEFT LOWER:(%d,%d), RIGHT LOWER:(%d,%d)\n", 
       my_rank, xs[my_rank], ys[my_rank], xs[my_rank], ys[my_rank]+ycell-1, xs[my_rank]+xcell-1, ys[my_rank], xs[my_rank]+xcell-1, ys[my_rank]+ycell-1);
    MPI_Barrier(comm2d);
 
