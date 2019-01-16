@@ -170,12 +170,7 @@ int main(void) {
       MPI_Wait(&recvRequest[WEST], &recvStatus[WEST]);   // wait to receive from west
       MPI_Wait(&recvRequest[EAST], &recvStatus[EAST]);   // wait to receive from east
       
-
-
-      MPI_Wait(&sendRequest[SOUTH], &sendStatus[SOUTH]); // wait to send to south
-      MPI_Wait(&sendRequest[NORTH], &sendStatus[NORTH]); // wait to send to north
-      MPI_Wait(&sendRequest[EAST], &sendStatus[EAST]);   // wait to send to east
-      MPI_Wait(&sendRequest[WEST], &sendStatus[WEST]);   // wait to send to west
+      MPI_Waitall(4, recvRequest, recvStatus); // wait to receive everything
 
       
       char str[10];
@@ -183,6 +178,7 @@ int main(void) {
       prtdat(size_total_x, size_total_y, u[0], str);
       
       iz = 1-iz;
+      MPI_Waitall(4, sendRequest, sendStatus); //wait to send everything
    }
 
    end_time = MPI_Wtime();
@@ -210,7 +206,7 @@ int main(void) {
 void update(int start, int end, int ny, float **uold, float **unew) {
    for (int i = start; i <= end; i++)
       for (int j = 1; j <= ny - 2; j++)
-         unew[i][j] = uold[i][j] + CX * (uold[i + 1][j] + uold[i - 1][j] - 2.0 * uold[i][j]) + CY * (uold[i][j + 1] + uold[i][j - 1] - 2.0 * uold[i][j]);
+         unew[i][j] = uold[i][j] + CX*(uold[i+1][j] + uold[i-1][j] - 2.0*uold[i][j]) + CY*(uold[i][j+1] + uold[i][j-1] - 2.0*uold[i][j]);
 }
 
 /**************************************************************************
