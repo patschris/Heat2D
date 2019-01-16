@@ -165,11 +165,6 @@ int main(void) {
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
 
-      MPI_Wait(&recvRequest[NORTH], &recvStatus[NORTH]); // wait to receive from north
-      MPI_Wait(&recvRequest[SOUTH], &recvStatus[SOUTH]); // wait to receive from south
-      MPI_Wait(&recvRequest[WEST], &recvStatus[WEST]);   // wait to receive from west
-      MPI_Wait(&recvRequest[EAST], &recvStatus[EAST]);   // wait to receive from east
-      
       MPI_Waitall(4, recvRequest, recvStatus); // wait to receive everything
 
       
