@@ -59,7 +59,7 @@ int main(void) {
 
    /* Find Bottom/South and Upper/North neighBors */
    MPI_Cart_shift(comm2d, 1, 1, &neighBor[NORTH], &neighBor[SOUTH]);
-  // printf("I am %d and my neighbors are North=%d, South=%d, East =%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
+   //printf("I am %d and my neighbors are North=%d, South=%d, East =%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
 
 
    /* Size of each cell */
@@ -147,30 +147,30 @@ int main(void) {
       sprintf(str, "%d.txt", my_rank);
       prtdat(size_total_x, size_total_y, u[0], str);
    }
-   //printf("Process %d -> LEFT UPPER:(%d,%d), RIGHT UPPER:(%d,%d), LEFT LOWER:(%d,%d), RIGHT LOWER:(%d,%d)\n", 
-   //   my_rank, xs[my_rank], ys[my_rank], xs[my_rank], ys[my_rank]+ycell-1, xs[my_rank]+xcell-1, ys[my_rank], xs[my_rank]+xcell-1, ys[my_rank]+ycell-1);
+   /*printf("Process %d -> LEFT UPPER:(%d,%d), RIGHT UPPER:(%d,%d), LEFT LOWER:(%d,%d), RIGHT LOWER:(%d,%d)\n", 
+      my_rank, xs[my_rank], ys[my_rank], xs[my_rank], ys[my_rank]+ycell-1, xs[my_rank]+xcell-1, ys[my_rank], xs[my_rank]+xcell-1, ys[my_rank]+ycell-1);*/
    
    MPI_Barrier(comm2d);
 
    start_time = MPI_Wtime();
    iz = 0;
    for (i = 0; i < STEPS; i++) {
-     // printf("I'm %d and I'm trying to receive from my north neighbor %d a row and place it above my first row. Current content: ", my_rank, neighBor[NORTH]);
-     // for (j=ys[my_rank]; j < ys[my_rank]+ycell; j++) printf("%.1f ", u[iz][xs[my_rank]-1][j]); printf("\n");
-      MPI_Irecv(&u[iz][xs[my_rank]-1][ys[my_rank]], ycell, MPI_FLOAT, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]);
+      MPI_Irecv(&u[iz][xs[my_rank]-1][ys[my_rank]], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive row from north
+      MPI_Irecv(&u[iz][xs[my_rank]+xcell][ys[my_rank]], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive row from south
 
-     // printf("I'm %d and I'm trying to send to my south neighbor %d my last row: ", my_rank, neighBor[SOUTH]);
-     // for (j=ys[my_rank]; j < ys[my_rank]+ycell; j++) printf("%.1f ", u[iz][xs[my_rank]+xcell-1][j]); printf("\n");
-      MPI_Isend(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], ycell, MPI_FLOAT, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]);
-
+      MPI_Isend(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send row to south
+      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send row to north
 
       MPI_Wait(&recvRequest[NORTH], &recvStatus[NORTH]);
-     // printf("Receive from north ok %d\n", my_rank);
+      MPI_Wait(&recvRequest[SOUTH], &recvStatus[SOUTH]);
+
       MPI_Wait(&sendRequest[SOUTH], &sendStatus[SOUTH]);
-      //printf("Send to south ok %d\n", my_rank);
-     // char str[10];
-     // sprintf(str, "After%d.txt", my_rank);
-     // prtdat(size_total_x, size_total_y, u[0], str);
+      MPI_Wait(&sendRequest[NORTH], &sendStatus[NORTH]);
+      
+      char str[10];
+      sprintf(str, "After%d.txt", my_rank);
+      prtdat(size_total_x, size_total_y, u[0], str);
+      
       iz = 1-iz;
    }
 
