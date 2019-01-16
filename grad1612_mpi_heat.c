@@ -150,28 +150,33 @@ int main(void) {
       my_rank, xs[my_rank], ys[my_rank], xs[my_rank], ys[my_rank]+ycell-1, xs[my_rank]+xcell-1, ys[my_rank], xs[my_rank]+xcell-1, ys[my_rank]+ycell-1);*/
    
    MPI_Barrier(comm2d);
-
    start_time = MPI_Wtime();
+   
    iz = 0;
    for (i = 0; i < STEPS; i++) {
+      /* Receives */
       MPI_Irecv(&u[iz][xs[my_rank]-1][ys[my_rank]], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive a row from north
       MPI_Irecv(&u[iz][xs[my_rank]+xcell][ys[my_rank]], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive a row from south
       MPI_Irecv(&u[iz][xs[my_rank]][ys[my_rank]-1], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[WEST]); //receive a column from west
-      
+      MPI_Irecv(&u[iz][xs[my_rank]][ys[my_rank]+ycell], 1, column, neighBor[EAST], 4, comm2d, &recvRequest[EAST]); // receive a column from east
+      /* Sends */
       MPI_Isend(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send a row to south
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send a row to north
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
+      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
+
+      MPI_Wait(&recvRequest[NORTH], &recvStatus[NORTH]); // wait to receive from north
+      MPI_Wait(&recvRequest[SOUTH], &recvStatus[SOUTH]); // wait to receive from south
+      MPI_Wait(&recvRequest[WEST], &recvStatus[WEST]);   // wait to receive from west
+      MPI_Wait(&recvRequest[EAST], &recvStatus[EAST]);   // wait to receive from east
       
-      MPI_Wait(&recvRequest[NORTH], &recvStatus[NORTH]);
-      MPI_Wait(&recvRequest[SOUTH], &recvStatus[SOUTH]);
-      MPI_Wait(&recvRequest[WEST], &recvStatus[WEST]);
-
-      
 
 
-      MPI_Wait(&sendRequest[SOUTH], &sendStatus[SOUTH]);
-      MPI_Wait(&sendRequest[NORTH], &sendStatus[NORTH]);
-      MPI_Wait(&sendRequest[EAST], &sendStatus[EAST]);
+      MPI_Wait(&sendRequest[SOUTH], &sendStatus[SOUTH]); // wait to send to south
+      MPI_Wait(&sendRequest[NORTH], &sendStatus[NORTH]); // wait to send to north
+      MPI_Wait(&sendRequest[EAST], &sendStatus[EAST]);   // wait to send to east
+      MPI_Wait(&sendRequest[WEST], &sendStatus[WEST]);   // wait to send to west
+
       
       char str[10];
       sprintf(str, "After%d.txt", my_rank);
