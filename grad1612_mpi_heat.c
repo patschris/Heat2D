@@ -27,7 +27,7 @@ void update(int, int, int, float **, float **);
 void prtdat(int, int, float **, char *);
 /****************************************************************************/
 
-enum coordinates { SOUTH = 0, EAST, NORTH, WEST};
+enum coordinates {SOUTH = 0, EAST, NORTH, WEST};
 
 int main(void) {
 
@@ -60,7 +60,6 @@ int main(void) {
    /* Find Bottom/South and Upper/North neighBors */
    MPI_Cart_shift(comm2d, 1, 1, &neighBor[NORTH], &neighBor[SOUTH]);
    //printf("I am %d and my neighbors are North=%d, South=%d, East =%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
-
 
    /* Size of each cell */
    int xcell = NXPROB / GRIDX;
@@ -155,17 +154,24 @@ int main(void) {
    start_time = MPI_Wtime();
    iz = 0;
    for (i = 0; i < STEPS; i++) {
-      MPI_Irecv(&u[iz][xs[my_rank]-1][ys[my_rank]], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive row from north
-      MPI_Irecv(&u[iz][xs[my_rank]+xcell][ys[my_rank]], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive row from south
-
-      MPI_Isend(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send row to south
-      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send row to north
-
+      MPI_Irecv(&u[iz][xs[my_rank]-1][ys[my_rank]], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive a row from north
+      MPI_Irecv(&u[iz][xs[my_rank]+xcell][ys[my_rank]], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive a row from south
+      MPI_Irecv(&u[iz][xs[my_rank]][ys[my_rank]-1], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[WEST]); //receive a column from west
+      
+      MPI_Isend(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send a row to south
+      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send a row to north
+      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
+      
       MPI_Wait(&recvRequest[NORTH], &recvStatus[NORTH]);
       MPI_Wait(&recvRequest[SOUTH], &recvStatus[SOUTH]);
+      MPI_Wait(&recvRequest[WEST], &recvStatus[WEST]);
+
+      
+
 
       MPI_Wait(&sendRequest[SOUTH], &sendStatus[SOUTH]);
       MPI_Wait(&sendRequest[NORTH], &sendStatus[NORTH]);
+      MPI_Wait(&sendRequest[EAST], &sendStatus[EAST]);
       
       char str[10];
       sprintf(str, "After%d.txt", my_rank);
