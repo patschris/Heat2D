@@ -31,7 +31,7 @@ enum coordinates {SOUTH = 0, EAST, NORTH, WEST};
 
 int main(void) {
 
-   int comm_sz, my_rank, neighBor[4], dims[2], periods[2], *xs, *ys, i, j, iz;
+   int comm_sz, my_rank, neighBor[4], dims[2], periods[2], *xs, *ys, i, j, k, iz;
    float **u[2]; /* array for grid */
    MPI_Comm comm2d;
    MPI_Datatype column, row;
@@ -153,31 +153,46 @@ int main(void) {
    start_time = MPI_Wtime();
    
    iz = 0;
-   for (i = 0; i < STEPS; i++) {
-      /* Receives */
+   for (k = 0; k < STEPS; k++) {
+      
+      /* Receive */
       MPI_Irecv(&u[iz][xs[my_rank]-1][ys[my_rank]], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive a row from north
       MPI_Irecv(&u[iz][xs[my_rank]+xcell][ys[my_rank]], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive a row from south
       MPI_Irecv(&u[iz][xs[my_rank]][ys[my_rank]-1], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[WEST]); //receive a column from west
       MPI_Irecv(&u[iz][xs[my_rank]][ys[my_rank]+ycell], 1, column, neighBor[EAST], 4, comm2d, &recvRequest[EAST]); // receive a column from east
-      /* Sends */
+      
+      /* Send */
       MPI_Isend(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send a row to south
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send a row to north
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
+     
+      printf("%d --> updating inner table from (%d,%d) to (%d,%d)\n", my_rank, xs[my_rank]+1, ys[my_rank]+1, xs[my_rank]+xcell-2, ys[my_rank]+ycell-2);
+      /* Update inner elements */
+      for (i = xs[my_rank]+1; i < xs[my_rank]+xcell-1; i++)
+         for (j = ys[my_rank]+1; j < ys[my_rank]+ycell-1; j++)
+            u[1-iz][i][j] = u[iz][i][j] + CX*(u[iz][i+1][j] + u[iz][i-1][j] - 2.0*u[iz][i][j]) + CY*(u[iz][i][j+1] + u[iz][i][j-1] - 2.0*u[iz][i][j]);
 
       MPI_Waitall(4, recvRequest, recvStatus); // wait to receive everything
-
       
+      /* Update boundary elements */
+      
+      
+      #if CONVERGENCE
+         /* Reduction */
+      #endif
+      
+      iz = 1-iz; // swap arrays
+      MPI_Waitall(4, sendRequest, sendStatus); //wait to send everything
+
       char str[10];
       sprintf(str, "After%d.txt", my_rank);
-      prtdat(size_total_x, size_total_y, u[0], str);
-      
-      iz = 1-iz;
-      MPI_Waitall(4, sendRequest, sendStatus); //wait to send everything
+      prtdat(size_total_x, size_total_y, u[iz], str);
    }
 
    end_time = MPI_Wtime();
    elapsed_time = end_time - start_time;
+   if (my_rank == MASTER) printf("Time: %.4f sec\n", elapsed_time);
 
    /* Free all arrays */
    free(xs);
