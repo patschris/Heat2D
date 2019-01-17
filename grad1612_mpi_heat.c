@@ -37,7 +37,7 @@ int main(void) {
    MPI_Status status[4];
    MPI_Request recvRequest[4], sendRequest[4];
    /* Variables for clock */
-   double start_time, end_time, elapsed_time;
+   double start_time, end_time, local_elapsed_time, elapsed_time;
    #if CONVERGENCE
       float locdiff, totdiff;
    #endif
@@ -199,8 +199,9 @@ int main(void) {
    }
 
    end_time = MPI_Wtime();
-   elapsed_time = end_time - start_time;
-   if (my_rank == MASTER) printf("Time: %.6f sec\n", elapsed_time);
+   local_elapsed_time = end_time - start_time;
+   MPI_Reduce(&local_elapsed_time, &elapsed_time, 1, MPI_DOUBLE, MPI_MAX, MASTER, comm2d);
+   if (my_rank == MASTER) printf("Elapsed time: %e sec\n", elapsed_time);
 
    /* Free all arrays */
    free(xs);
