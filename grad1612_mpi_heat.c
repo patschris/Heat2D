@@ -23,7 +23,6 @@
 /**************************************************************************
 * Prototypes
 ****************************************************************************/
-void update(int, int, int, float **, float **);
 void prtdat(int, int, float **, char *);
 /****************************************************************************/
 
@@ -39,6 +38,9 @@ int main(void) {
    MPI_Request recvRequest[4], sendRequest[4];
    /* Variables for clock */
    double start_time, end_time, elapsed_time;
+   #if CONVERGENCE
+      float locdiff, totdiff;
+   #endif
 
    /* First, find out my rank and how many tasks are running */
    MPI_Init(NULL, NULL);
@@ -155,7 +157,7 @@ int main(void) {
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send a row to north
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
-     
+
       /* Update inner elements */
       for (i = xs[my_rank]+1; i < xs[my_rank]+xcell-1; i++)
          for (j = ys[my_rank]+1; j < ys[my_rank]+ycell-1; j++)
@@ -178,7 +180,14 @@ int main(void) {
       }
       
       #if CONVERGENCE
-         /* Reduction */
+         if ((i+1) % INTERVAL == 0) {
+            locdiff = 0.0;
+            for (i = xs[my_rank]; i < xs[my_rank]+xcell; i++)
+               for (j = ys[my_rank]; j < ys[my_rank]+ycell; j++)
+                  locdiff += (u[iz][i][j] - u[1-iz][i][j])*(u[iz][i][j] - u[1-iz][i][j]); // square distance
+            MPI_Allreduce(&locdiff, &totdiff, 1, MPI_FLOAT, MPI_SUM, comm2d);
+            if (totdiff < SENSITIVITY) break;
+         }
       #endif
       
       iz = 1-iz; // swap arrays
@@ -207,15 +216,6 @@ int main(void) {
 
    MPI_Finalize();
    return 0;
-}
-
-/**************************************************************************
- *  subroutine update
- ****************************************************************************/
-void update(int start, int end, int ny, float **uold, float **unew) {
-   for (int i = start; i <= end; i++)
-      for (int j = 1; j <= ny - 2; j++)
-         unew[i][j] = uold[i][j] + CX*(uold[i+1][j] + uold[i-1][j] - 2.0*uold[i][j]) + CY*(uold[i][j+1] + uold[i][j-1] - 2.0*uold[i][j]);
 }
 
 /**************************************************************************
