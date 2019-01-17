@@ -92,8 +92,8 @@ int main(void) {
    MPI_Type_commit(&row);
 
    if (my_rank == MASTER) {
-      if ((comm_sz > MAXWORKER || comm_sz < MINWORKER) && comm_sz != GRIDX * GRIDY) {
-         printf("ERROR: the number of tasks must be between %d and %d.\n Quiting...\n", MINWORKER + 1, MAXWORKER + 1);
+      if (comm_sz > MAXWORKER || comm_sz < MINWORKER || comm_sz != GRIDX * GRIDY) {
+         printf("ERROR: the number of tasks must be between %d and %d.\n Quiting...\n", MINWORKER, MAXWORKER);
          MPI_Abort(comm2d, 1);
          exit(1);
       }
@@ -144,19 +144,23 @@ int main(void) {
    start_time = MPI_Wtime();
    
    iz = 0;
+   
+   /* Persistent communication */
+   MPI_Send_init(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send a row to south
+   MPI_Send_init(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send a row to north
+   MPI_Send_init(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
+   MPI_Send_init(&u[iz][xs[my_rank]][ys[my_rank]], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
+   
+   MPI_Recv_init(&u[iz][xs[my_rank]-1][ys[my_rank]], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive a row from north
+   MPI_Recv_init(&u[iz][xs[my_rank]+xcell][ys[my_rank]], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive a row from south
+   MPI_Recv_init(&u[iz][xs[my_rank]][ys[my_rank]-1], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[WEST]); //receive a column from west
+   MPI_Recv_init(&u[iz][xs[my_rank]][ys[my_rank]+ycell], 1, column, neighBor[EAST], 4, comm2d, &recvRequest[EAST]); // receive a column from east
+
    for (k = 0; k < STEPS; k++) {
-      
       /* Receive */
-      MPI_Irecv(&u[iz][xs[my_rank]-1][ys[my_rank]], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive a row from north
-      MPI_Irecv(&u[iz][xs[my_rank]+xcell][ys[my_rank]], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive a row from south
-      MPI_Irecv(&u[iz][xs[my_rank]][ys[my_rank]-1], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[WEST]); //receive a column from west
-      MPI_Irecv(&u[iz][xs[my_rank]][ys[my_rank]+ycell], 1, column, neighBor[EAST], 4, comm2d, &recvRequest[EAST]); // receive a column from east
-      
+      MPI_Startall(4, sendRequest);
       /* Send */
-      MPI_Isend(&u[iz][xs[my_rank]+xcell-1][ys[my_rank]], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send a row to south
-      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send a row to north
-      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
-      MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
+      MPI_Startall(4, recvRequest);
 
       /* Update inner elements */
       for (i = xs[my_rank]+1; i < xs[my_rank]+xcell-1; i++)
