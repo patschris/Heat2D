@@ -30,36 +30,31 @@ void prtdat(int, int, float **, char *);
 enum coordinates {SOUTH = 0, EAST, NORTH, WEST};
 
 int main(void) {
-
-   int comm_sz, my_rank, neighBor[4], dims[2], periods[2], *xs, *ys, i, j, k, iz;
-   float **u[2]; /* array for grid */
+   
+   float **u[2];
+   int i, j, k, iz, *xs, *ys, comm_sz, my_rank, neighBor[4], dims[2], periods[2];
    MPI_Comm comm2d;
    MPI_Datatype column, row;
-   MPI_Status recvStatus[4], sendStatus[4];
+   MPI_Status status[4];
    MPI_Request recvRequest[4], sendRequest[4];
    /* Variables for clock */
    double start_time, end_time, elapsed_time;
 
-   /* First, find out my taskid and how many tasks are running */
+   /* First, find out my rank and how many tasks are running */
    MPI_Init(NULL, NULL);
    MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
    /* Create 2D cartesian grid */
    periods[0] = periods[1] = 0;
-   /* Invert (Ox,Oy) classic convention */
    dims[0] = GRIDX;
    dims[1] = GRIDY;
    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, REORGANISATION, &comm2d);
 
-   /* Identify neighBors */
-   neighBor[SOUTH] = neighBor[EAST] = neighBor[NORTH] = neighBor[WEST] = MPI_PROC_NULL;
    /* Find Left/West and Right/East neighBors */
    MPI_Cart_shift(comm2d, 0, 1, &neighBor[WEST], &neighBor[EAST]);
-
    /* Find Bottom/South and Upper/North neighBors */
    MPI_Cart_shift(comm2d, 1, 1, &neighBor[NORTH], &neighBor[SOUTH]);
-   //printf("I am %d and my neighbors are North=%d, South=%d, East =%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
 
    /* Size of each cell */
    int xcell = NXPROB / GRIDX;
@@ -113,10 +108,6 @@ int main(void) {
       for (i = 1; i <= GRIDY; i++)
          for (j = 1; j < GRIDX; j++)
             xs[(i - 1) * GRIDX + j] = xs[(i - 1) * GRIDX + (j - 1)] + xcell + 2;
-      
-      /*printf("size_total_x=%d, size_total_y=%d\n", size_total_x, size_total_y);
-      printf("xs: "); for (i=0; i<comm_sz; i++) printf("%d ", xs[i]); printf("\n");
-      printf("ys: "); for (i=0; i<comm_sz; i++) printf("%d ", ys[i]); printf("\n");*/
    }
 
    MPI_Bcast(xs, comm_sz, MPI_INT, 0, comm2d);
@@ -130,7 +121,7 @@ int main(void) {
             u[1][i][j] = 0;
          }
       }
-      prtdat(size_total_x, size_total_y, u[0], "initial.dat");
+      prtdat(size_total_x, size_total_y, u[0], "./initial.dat");
    }
    else {
       for (i = 0; i < size_total_x; i++) {
@@ -146,8 +137,6 @@ int main(void) {
       sprintf(str, "%d.txt", my_rank);
       prtdat(size_total_x, size_total_y, u[0], str);
    }
-   /*printf("Process %d -> LEFT UPPER:(%d,%d), RIGHT UPPER:(%d,%d), LEFT LOWER:(%d,%d), RIGHT LOWER:(%d,%d)\n", 
-      my_rank, xs[my_rank], ys[my_rank], xs[my_rank], ys[my_rank]+ycell-1, xs[my_rank]+xcell-1, ys[my_rank], xs[my_rank]+xcell-1, ys[my_rank]+ycell-1);*/
    
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
@@ -167,23 +156,29 @@ int main(void) {
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]+ycell-1], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
       MPI_Isend(&u[iz][xs[my_rank]][ys[my_rank]], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
      
-      printf("%d --> updating inner table from (%d,%d) to (%d,%d)\n", my_rank, xs[my_rank]+1, ys[my_rank]+1, xs[my_rank]+xcell-2, ys[my_rank]+ycell-2);
       /* Update inner elements */
       for (i = xs[my_rank]+1; i < xs[my_rank]+xcell-1; i++)
          for (j = ys[my_rank]+1; j < ys[my_rank]+ycell-1; j++)
             u[1-iz][i][j] = u[iz][i][j] + CX*(u[iz][i+1][j] + u[iz][i-1][j] - 2.0*u[iz][i][j]) + CY*(u[iz][i][j+1] + u[iz][i][j-1] - 2.0*u[iz][i][j]);
 
-      MPI_Waitall(4, recvRequest, recvStatus); // wait to receive everything
+      MPI_Waitall(4, recvRequest, status); // wait to receive everything
       
       /* Update boundary elements */
+
+      /* First and last row */
+      for (j=ys[my_rank]; j<ys[my_rank]+ycell; j++) {
+         u[1-iz][xs[my_rank]][j] = u[iz][xs[my_rank]][j] + CX*(u[iz][xs[my_rank]+1][j] + u[iz][xs[my_rank]-1][j] - 2.0*u[iz][xs[my_rank]][j]) + CY*(u[iz][xs[my_rank]][j+1] + u[iz][xs[my_rank]][j-1] - 2.0*u[iz][xs[my_rank]][j]);
+         u[1-iz][xs[my_rank]+xcell-1][j] = u[iz][xs[my_rank]+xcell-1][j] + CX*(u[iz][xs[my_rank]+xcell][j] + u[iz][xs[my_rank]+xcell-2][j] - 2.0*u[iz][xs[my_rank]+xcell-1][j]) + CY*(u[iz][xs[my_rank]+xcell-1][j+1] + u[iz][xs[my_rank]+xcell-1][j-1] - 2.0*u[iz][xs[my_rank]+xcell-1][j]);
+      }
       
+      /* First and last column */
       
       #if CONVERGENCE
          /* Reduction */
       #endif
       
       iz = 1-iz; // swap arrays
-      MPI_Waitall(4, sendRequest, sendStatus); //wait to send everything
+      MPI_Waitall(4, sendRequest, status); //wait to send everything
 
       char str[10];
       sprintf(str, "After%d.txt", my_rank);
