@@ -165,13 +165,17 @@ int main(void) {
       
       /* Update boundary elements */
 
-      /* First and last row */
+      /* First and last row update */
       for (j=ys[my_rank]; j<ys[my_rank]+ycell; j++) {
          u[1-iz][xs[my_rank]][j] = u[iz][xs[my_rank]][j] + CX*(u[iz][xs[my_rank]+1][j] + u[iz][xs[my_rank]-1][j] - 2.0*u[iz][xs[my_rank]][j]) + CY*(u[iz][xs[my_rank]][j+1] + u[iz][xs[my_rank]][j-1] - 2.0*u[iz][xs[my_rank]][j]);
          u[1-iz][xs[my_rank]+xcell-1][j] = u[iz][xs[my_rank]+xcell-1][j] + CX*(u[iz][xs[my_rank]+xcell][j] + u[iz][xs[my_rank]+xcell-2][j] - 2.0*u[iz][xs[my_rank]+xcell-1][j]) + CY*(u[iz][xs[my_rank]+xcell-1][j+1] + u[iz][xs[my_rank]+xcell-1][j-1] - 2.0*u[iz][xs[my_rank]+xcell-1][j]);
       }
       
-      /* First and last column */
+      /* First and last column update */
+      for (j=xs[my_rank]+1; j<xs[my_rank]+xcell-1; j++) {
+         u[1-iz][j][ys[my_rank]] = u[iz][j][ys[my_rank]] + CX*(u[iz][j+1][ys[my_rank]] + u[iz][j-1][ys[my_rank]] - 2.0*u[iz][j][ys[my_rank]]) + CY*(u[iz][j][ys[my_rank]+1] + u[iz][j][ys[my_rank]-1] - 2.0*u[iz][j][ys[my_rank]]);
+         u[1-iz][j][ys[my_rank]+ycell-1] = u[iz][j][ys[my_rank]+ycell-1] + CX*(u[iz][j+1][ys[my_rank]+ycell-1] + u[iz][j-1][ys[my_rank]+ycell-1] - 2.0*u[iz][j][ys[my_rank]+ycell-1]) + CY*(u[iz][j][ys[my_rank]+ycell] + u[iz][j][ys[my_rank]+ycell-2] - 2.0*u[iz][j][ys[my_rank]+ycell-1]);
+      }
       
       #if CONVERGENCE
          /* Reduction */
@@ -187,7 +191,7 @@ int main(void) {
 
    end_time = MPI_Wtime();
    elapsed_time = end_time - start_time;
-   if (my_rank == MASTER) printf("Time: %.4f sec\n", elapsed_time);
+   if (my_rank == MASTER) printf("Time: %.6f sec\n", elapsed_time);
 
    /* Free all arrays */
    free(xs);
