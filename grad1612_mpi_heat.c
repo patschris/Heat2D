@@ -4,7 +4,7 @@
 
 #define NXPROB 10                      /* x dimension of problem grid */
 #define NYPROB 10                      /* y dimension of problem grid */
-#define STEPS 1                        /* number of time steps */
+#define STEPS 100                       /* number of time steps */
 #define MAXWORKER 12                   /* maximum number of worker tasks */
 #define MINWORKER 1                    /* minimum number of worker tasks */
 #define MASTER 0                       /* taskid of first process */
@@ -13,27 +13,21 @@
 #define GRIDX 2
 #define GRIDY 2
 
-#define CONVERGENCE 0                  /* 1: On, 0: Off */
-#define INTERVAL 200                   /* After how many rounds are we checking for convergence */
+#define CONVERGENCE 1                  /* 1: On, 0: Off */
+#define INTERVAL 10                   /* After how many rounds are we checking for convergence */
 #define SENSITIVITY 0.1                /* Convergence's sensitivity (EPSILON) */
 
 #define CX 0.1                         /* Old struct parms */
 #define CY 0.1
 
-/**************************************************************************
-* Prototypes
-****************************************************************************/
-void prtdat(int, int, float **, char *);
-/****************************************************************************/
-
 enum coordinates {SOUTH = 0, EAST, NORTH, WEST};
 
 int main(void) {
-   
+   FILE *fp;
    float **u[2];
    int i, j, k, iz, *xs, *ys, comm_sz, my_rank, neighBor[4], dims[2], periods[2];
    MPI_Comm comm2d;
-   MPI_Datatype column, row;
+   MPI_Datatype column, row, subarray;
    MPI_Status status[4];
    MPI_Request recvRequest[4], sendRequest[4];
    /* Variables for clock */
@@ -84,17 +78,20 @@ int main(void) {
    xs = malloc(comm_sz * sizeof(int));
    ys = malloc(comm_sz * sizeof(int));
 
-   /* Create column data type to communicate with East and West neighBors */
-   MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
-   MPI_Type_commit(&column);
    /* Create row data type to communicate with North and South neighBors */
    MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
    MPI_Type_commit(&row);
+   /* Create column data type to communicate with East and West neighBors */
+   MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
+   MPI_Type_commit(&column);
+   /* Create subarray data type to send back to the MASTER process the results */
+   MPI_Type_vector(xcell+2, ycell+2, size_total_y, MPI_FLOAT, &subarray);
+   MPI_Type_commit(&subarray);
 
    if (my_rank == MASTER) {
       if (comm_sz > MAXWORKER || comm_sz < MINWORKER || comm_sz != GRIDX * GRIDY) {
-         printf("ERROR: the number of tasks must be between %d and %d.\n Quiting...\n", MINWORKER, MAXWORKER);
-         MPI_Abort(comm2d, 1);
+         printf("ERROR: the number of tasks must be between %d and %d.\nQuiting...\n", MINWORKER, MAXWORKER);
+         MPI_Abort(MPI_COMM_WORLD, 1);
          exit(1);
       }
       else {
@@ -117,27 +114,27 @@ int main(void) {
 
    if (my_rank == MASTER) {
       printf("Initializing grid and writing initial.dat file...\n");
+      fp = fopen("initial.dat", "w");
       for (i = 0; i < size_total_x; i++) {
          for (j = 0; j < size_total_y; j++) {
             u[0][i][j] = i * (size_total_x - i - 1) * j * (size_total_y - j - 1);
             u[1][i][j] = 0;
+            fprintf(fp, "%6.1f ", u[0][i][j]);
          }
+         fprintf(fp, "\n");
       }
-      prtdat(size_total_x, size_total_y, u[0], "./initial.dat");
+      fclose(fp);
    }
    else {
       for (i = 0; i < size_total_x; i++) {
          for (j = 0; j < size_total_y; j++) {
-            if (i >= xs[my_rank] && i <= xs[my_rank]+xcell-1 && j >= ys[my_rank] && j <= ys[my_rank]+ycell-1)
+            if (i >= xs[my_rank] && i < xs[my_rank]+xcell && j >= ys[my_rank] && j < ys[my_rank]+ycell)
                u[0][i][j] = i * (size_total_x - i - 1) * j * (size_total_y - j - 1);
             else
                u[0][i][j] = 0.0;
             u[1][i][j] = 0.0;
          }
       }
-      char str[10];
-      sprintf(str, "%d.txt", my_rank);
-      prtdat(size_total_x, size_total_y, u[0], str);
    }
    
    MPI_Barrier(comm2d);
@@ -183,6 +180,7 @@ int main(void) {
          u[1-iz][j][ys[my_rank]+ycell-1] = u[iz][j][ys[my_rank]+ycell-1] + CX*(u[iz][j+1][ys[my_rank]+ycell-1] + u[iz][j-1][ys[my_rank]+ycell-1] - 2.0*u[iz][j][ys[my_rank]+ycell-1]) + CY*(u[iz][j][ys[my_rank]+ycell] + u[iz][j][ys[my_rank]+ycell-2] - 2.0*u[iz][j][ys[my_rank]+ycell-1]);
       }
       
+      /* Convergence check every INTERVAL iterations */
       #if CONVERGENCE
          if ((i+1) % INTERVAL == 0) {
             locdiff = 0.0;
@@ -196,17 +194,28 @@ int main(void) {
       
       iz = 1-iz; // swap arrays
       MPI_Waitall(4, sendRequest, status); //wait to send everything
-
-      char str[10];
-      sprintf(str, "After%d.txt", my_rank);
-      prtdat(size_total_x, size_total_y, u[iz], str);
    }
 
    end_time = MPI_Wtime();
    local_elapsed_time = end_time - start_time;
    MPI_Reduce(&local_elapsed_time, &elapsed_time, 1, MPI_DOUBLE, MPI_MAX, MASTER, comm2d);
-   if (my_rank == MASTER) printf("Elapsed time: %e sec\n", elapsed_time);
 
+   if (my_rank == MASTER) {
+      printf("Elapsed time: %e sec\n", elapsed_time);
+      for (i=1; i<comm_sz; i++) MPI_Recv(&u[iz][xs[i]-1][ys[i]-1], 1, subarray, i, 5, comm2d, MPI_STATUS_IGNORE);
+      printf("Writing final.dat file...\n");
+      fp = fopen("final.dat", "w");
+      for (i = 0; i < size_total_x; i++) {
+         for (j = 0; j < size_total_y; j++) {
+            fprintf(fp, "%6.1f ", u[iz][i][j]);
+         }
+         fprintf(fp, "\n");
+      }
+      fclose(fp);
+   }
+   else {
+      MPI_Send(&u[iz][xs[my_rank]-1][ys[my_rank]-1], 1, subarray, MASTER, 5, comm2d);
+   }
    /* Free all arrays */
    free(xs);
    free(ys);
@@ -216,23 +225,10 @@ int main(void) {
    free(u[1]);
 
    /* Free datatypes */
-   MPI_Type_free(&column);
    MPI_Type_free(&row);
+   MPI_Type_free(&column);
+   MPI_Type_free(&subarray);
 
    MPI_Finalize();
    return 0;
-}
-
-/**************************************************************************
- * subroutine prtdat
- **************************************************************************/
-void prtdat(int nx, int ny, float **u, char *fnam) {
-   FILE *fp = fopen(fnam, "w");
-   for (int i = 0; i < nx; i++) {
-      for (int j = 0; j < ny; j++) {
-         fprintf(fp, "%6.1f ", u[i][j]);
-      }
-      fprintf(fp, "\n");
-   }
-   fclose(fp);
 }
