@@ -23,11 +23,10 @@
 enum coordinates {SOUTH = 0, EAST, NORTH, WEST};
 
 int main(void) {
-   FILE *fp;
    float **u[2];
    int i, j, k, iz, *xs, *ys, comm_sz, my_rank, neighBor[4], dims[2], periods[2];
    MPI_Comm comm2d;
-   MPI_Datatype column, row, subarray;
+   MPI_Datatype column, row;
    MPI_Status status[4];
    MPI_Request recvRequest[4], sendRequest[4];
    /* Variables for clock */
@@ -84,9 +83,6 @@ int main(void) {
    /* Create column data type to communicate with East and West neighBors */
    MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
    MPI_Type_commit(&column);
-   /* Create subarray data type to send back to the MASTER process the results */
-   MPI_Type_vector(xcell+2, ycell+2, size_total_y, MPI_FLOAT, &subarray);
-   MPI_Type_commit(&subarray);
 
    if (my_rank == MASTER) {
       if (comm_sz > MAXWORKER || comm_sz < MINWORKER || comm_sz != GRIDX * GRIDY) {
@@ -112,34 +108,20 @@ int main(void) {
    MPI_Bcast(xs, comm_sz, MPI_INT, 0, comm2d);
    MPI_Bcast(ys, comm_sz, MPI_INT, 0, comm2d);
 
-   if (my_rank == MASTER) {
-      printf("Initializing grid and writing initial.dat file...\n");
-      fp = fopen("initial.dat", "w");
-      for (i = 0; i < size_total_x; i++) {
-         for (j = 0; j < size_total_y; j++) {
+   /* Each process initializes it's 2D subarray */
+   for (i = 0; i < size_total_x; i++) {
+      for (j = 0; j < size_total_y; j++) {
+         if (i >= xs[my_rank] && i < xs[my_rank]+xcell && j >= ys[my_rank] && j < ys[my_rank]+ycell)
             u[0][i][j] = i * (size_total_x - i - 1) * j * (size_total_y - j - 1);
-            u[1][i][j] = 0;
-            fprintf(fp, "%6.1f ", u[0][i][j]);
-         }
-         fprintf(fp, "\n");
-      }
-      fclose(fp);
-   }
-   else {
-      for (i = 0; i < size_total_x; i++) {
-         for (j = 0; j < size_total_y; j++) {
-            if (i >= xs[my_rank] && i < xs[my_rank]+xcell && j >= ys[my_rank] && j < ys[my_rank]+ycell)
-               u[0][i][j] = i * (size_total_x - i - 1) * j * (size_total_y - j - 1);
-            else
-               u[0][i][j] = 0.0;
-            u[1][i][j] = 0.0;
-         }
+         else
+            u[0][i][j] = 0.0;
+         u[1][i][j] = 0.0;
       }
    }
    
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
-   
+
    iz = 0;
    
    /* Persistent communication */
@@ -195,27 +177,12 @@ int main(void) {
       iz = 1-iz; // swap arrays
       MPI_Waitall(4, sendRequest, status); //wait to send everything
    }
-
    end_time = MPI_Wtime();
+   
    local_elapsed_time = end_time - start_time;
    MPI_Reduce(&local_elapsed_time, &elapsed_time, 1, MPI_DOUBLE, MPI_MAX, MASTER, comm2d);
+   if (my_rank == MASTER) printf("Elapsed time: %e sec\n", elapsed_time);
 
-   if (my_rank == MASTER) {
-      printf("Elapsed time: %e sec\n", elapsed_time);
-      for (i=1; i<comm_sz; i++) MPI_Recv(&u[iz][xs[i]-1][ys[i]-1], 1, subarray, i, 5, comm2d, MPI_STATUS_IGNORE);
-      printf("Writing final.dat file...\n");
-      fp = fopen("final.dat", "w");
-      for (i = 0; i < size_total_x; i++) {
-         for (j = 0; j < size_total_y; j++) {
-            fprintf(fp, "%6.1f ", u[iz][i][j]);
-         }
-         fprintf(fp, "\n");
-      }
-      fclose(fp);
-   }
-   else {
-      MPI_Send(&u[iz][xs[my_rank]-1][ys[my_rank]-1], 1, subarray, MASTER, 5, comm2d);
-   }
    /* Free all arrays */
    free(xs);
    free(ys);
@@ -227,7 +194,6 @@ int main(void) {
    /* Free datatypes */
    MPI_Type_free(&row);
    MPI_Type_free(&column);
-   MPI_Type_free(&subarray);
 
    MPI_Finalize();
    return 0;
