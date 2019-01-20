@@ -190,11 +190,18 @@ int main(void) {
       #if CONVERGENCE
          if ((i+1) % INTERVAL == 0) {
             locdiff = 0.0;
+            #pragma omp parallel for schedule(static,1) reduction(+:locdiff)
             for (i = xs[my_rank]; i < xs[my_rank]+xcell; i++)
                for (j = ys[my_rank]; j < ys[my_rank]+ycell; j++)
                   locdiff += (u[iz][i][j] - u[1-iz][i][j])*(u[iz][i][j] - u[1-iz][i][j]); // square distance
-            MPI_Allreduce(&locdiff, &totdiff, 1, MPI_FLOAT, MPI_SUM, comm2d);
-            if (totdiff < SENSITIVITY) break;
+            
+            #pragma omp barrier
+            
+            #pragma omp master
+            {
+               MPI_Allreduce(&locdiff, &totdiff, 1, MPI_FLOAT, MPI_SUM, comm2d);
+               if (totdiff < SENSITIVITY) break;
+            }
          }
       #endif
       #pragma omp master
