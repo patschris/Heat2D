@@ -6,15 +6,13 @@
 #define NXPROB 10                      /* x dimension of problem grid */
 #define NYPROB 10                      /* y dimension of problem grid */
 #define STEPS 100                      /* number of time steps */
-#define MAXWORKER 12                   /* maximum number of worker tasks */
-#define MINWORKER 1                    /* minimum number of worker tasks */
 #define MASTER 0                       /* taskid of first process */
 
-#define REORGANISATION 1
+#define REORGANISATION 1               /* Reorganization of processes for cartesian grid (1: Enable, 0: Disable) */
 #define GRIDX 2
 #define GRIDY 2
 
-#define CONVERGENCE 0                  /* 1: On, 0: Off */
+#define CONVERGENCE 1                  /* 1: On, 0: Off */
 #define INTERVAL 10                    /* After how many rounds are we checking for convergence */
 #define SENSITIVITY 0.1                /* Convergence's sensitivity (EPSILON) */
 
@@ -64,11 +62,27 @@ int main(void) {
 
    /* Allocate 2D contiguous arrays u[0] and u[1] (3d u) */
    /* Allocate size_total_x rows */
-   u[0] = malloc(size_total_x * sizeof(*u[0]));
-   u[1] = malloc(size_total_x * sizeof(*u[1]));
+   if ((u[0] = malloc(size_total_x * sizeof(*u[0]))) == NULL) {
+      perror ("u[0] malloc failed");
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      exit(1);
+   }
+   if ((u[1] = malloc(size_total_x * sizeof(*u[1]))) == NULL) {
+      perror ("u[1] malloc failed");
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      exit(1);
+   }
    /* Allocate u[0][0] and u[1][0] for contiguous arrays */
-   u[0][0] = malloc(size_total_x * size_total_y * sizeof(**u[0]));
-   u[1][0] = malloc(size_total_x * size_total_y * sizeof(**u[1]));
+   if ((u[0][0] = malloc(size_total_x * size_total_y * sizeof(**u[0]))) == NULL) {
+      perror ("u[0][0] malloc failed");
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      exit(1);
+   }
+   if ((u[1][0] = malloc(size_total_x * size_total_y * sizeof(**u[1]))) == NULL) {
+      perror ("u[1][0] malloc failed");
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      exit(1);
+   }
    /* Loop on rows */
    #pragma omp parallel for num_threads(NUMTHREADS) schedule (static,1) default(none) private(i) shared(u, size_total_x, size_total_y)
    for (i = 1; i < size_total_x; i++) {
@@ -78,8 +92,16 @@ int main(void) {
    }
 
    /* Allocate coordinates of processes */
-   xs = malloc(comm_sz * sizeof(int));
-   ys = malloc(comm_sz * sizeof(int));
+   if ((xs = malloc(comm_sz * sizeof(int))) == NULL) {
+      perror ("xs malloc failed");
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      exit(1);
+   }
+   if ((ys = malloc(comm_sz * sizeof(int))) == NULL) {
+      perror ("ys malloc failed");
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      exit(1);
+   }
 
    /* Create row data type to communicate with North and South neighBors */
    MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
@@ -89,8 +111,8 @@ int main(void) {
    MPI_Type_commit(&column);
 
    if (my_rank == MASTER) {
-      if (comm_sz > MAXWORKER || comm_sz < MINWORKER || comm_sz != GRIDX * GRIDY) {
-         printf("ERROR: the number of tasks must be between %d and %d.\nQuiting...\n", MINWORKER, MAXWORKER);
+      if (comm_sz != GRIDX * GRIDY) {
+         printf("ERROR: the number of tasks must be equal to %d.\nQuiting...\n", GRIDX*GRIDY);
          MPI_Abort(MPI_COMM_WORLD, 1);
          exit(1);
       }
