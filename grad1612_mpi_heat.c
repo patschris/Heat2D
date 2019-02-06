@@ -101,16 +101,14 @@ int main(void) {
       exit(1);
    }
 
-   /* Create row data type to communicate with North and South neighBors */
-   MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
-   MPI_Type_commit(&row);
-   /* Create column data type to communicate with East and West neighBors */
-   MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
-   MPI_Type_commit(&column);
-
    if (my_rank == MASTER) {
       if (comm_sz != GRIDX * GRIDY) {
          printf("ERROR: the number of tasks must be equal to %d.\nQuiting...\n", GRIDX*GRIDY);
+         MPI_Abort(MPI_COMM_WORLD, 1);
+         exit(1);
+      }
+      else if (NXPROB % GRIDX || NYPROB % GRIDY) {
+         printf("ERROR: (%d/%d) or (%d/%d) is not an integer\nQuiting...\n", NXPROB, GRIDX, NYPROB, GRIDY);
          MPI_Abort(MPI_COMM_WORLD, 1);
          exit(1);
       }
@@ -128,6 +126,13 @@ int main(void) {
          for (j = 1; j < GRIDX; j++)
             xs[(i - 1) * GRIDX + j] = xs[(i - 1) * GRIDX + (j - 1)] + xcell + 2;
    }
+
+   /* Create row data type to communicate with North and South neighBors */
+   MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
+   MPI_Type_commit(&row);
+   /* Create column data type to communicate with East and West neighBors */
+   MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
+   MPI_Type_commit(&column);
 
    MPI_Bcast(xs, comm_sz, MPI_INT, 0, comm2d);
    MPI_Bcast(ys, comm_sz, MPI_INT, 0, comm2d);
