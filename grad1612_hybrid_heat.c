@@ -126,6 +126,8 @@ int main(void) {
       #pragma omp parallel for num_threads(NUMTHREADS) schedule (static,1) default(none) private(i) shared(ys)
       for (i = 0; i < GRIDX; i++) ys[i] = 1;
 
+      #pragma omp barrier
+
       #pragma omp parallel for num_threads(NUMTHREADS) collapse(2) schedule (static,1) default(none) private(i,j) shared(ys, ycell)
       for (i = 1; i < GRIDY; i++)
          for (j = 0; j < GRIDX; j++)
@@ -134,11 +136,15 @@ int main(void) {
       #pragma omp parallel for num_threads(NUMTHREADS) schedule (static,1) default(none) private(i) shared(xs)
       for (i = 0; i < GRIDY; i++) xs[i * GRIDX] = 1;
       
+      #pragma omp barrier
+
       #pragma omp parallel for num_threads(NUMTHREADS) collapse(2) schedule (static,1) default(none) private(i,j) shared(xs, xcell) 
       for (i = 1; i <= GRIDY; i++)
          for (j = 1; j < GRIDX; j++)
             xs[(i - 1) * GRIDX + j] = xs[(i - 1) * GRIDX + (j - 1)] + xcell + 2;
    }
+
+   #pragma omp barrier
 
    MPI_Bcast(xs, comm_sz, MPI_INT, 0, comm2d);
    MPI_Bcast(ys, comm_sz, MPI_INT, 0, comm2d);
@@ -163,6 +169,7 @@ int main(void) {
       printf("I am %d and I am running on %s\n", my_rank, processor);
    #endif
 
+   #pragma omp barrier
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
 
@@ -247,17 +254,6 @@ int main(void) {
    local_elapsed_time = end_time - start_time;
    MPI_Reduce(&local_elapsed_time, &elapsed_time, 1, MPI_DOUBLE, MPI_MAX, MASTER, comm2d);
    if (my_rank == MASTER) printf("Elapsed time: %e sec\n", elapsed_time);
-   
-   char str[10];
-   sprintf(str, "aft%d.txt", my_rank);
-   FILE *fp = fopen(str, "w");
-   for (i = 0; i < size_total_x; i++) {
-      for (j = 0; j < size_total_y; j++) {
-         fprintf(fp, "%6.1f ", u[iz][i][j]);
-      }
-      fprintf(fp,"\n");
-   }
-   fclose(fp);
 
    /* Free all arrays */
    free(xs);
