@@ -56,7 +56,7 @@ int main(void) {
    /* Size with extra rows and columns */
    int size_total_x = NXPROB + 2*GRIDX;
    int size_total_y = NYPROB + 2*GRIDY;
-   printf("I am %d and my neighbors are North=%d, South=%d, East =%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
+
    /* Allocate 2D contiguous arrays u[0] and u[1] (3d u) */
    /* Allocate size_total_x rows */
    if ((u[0] = malloc(size_total_x * sizeof(*u[0]))) == NULL) {
