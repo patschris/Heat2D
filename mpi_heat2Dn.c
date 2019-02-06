@@ -26,8 +26,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define NXPROB      20                 /* x dimension of problem grid */
-#define NYPROB      20                 /* y dimension of problem grid */
+#define NXPROB      10                 /* x dimension of problem grid */
+#define NYPROB      10                 /* y dimension of problem grid */
 #define STEPS       100                /* number of time steps */
 #define MAXWORKER   8                  /* maximum number of worker tasks */
 #define MINWORKER   3                  /* minimum number of worker tasks */
@@ -52,11 +52,12 @@ int	taskid,                     /* this task's unique id */
 	numtasks,                   /* number of tasks */
 	averow,rows,offset,extra,   /* for sending rows of data */
 	dest, source,               /* to - from for message send-receive */
-	left,right,        /* neighbor tasks */
+	left,right,                 /* neighbor tasks */
 	msgtype,                    /* for message types */
 	rc,start,end,               /* misc */
 	i,ix,iy,iz,it;              /* loop variables */
 MPI_Status status;
+double start_time, end_time, local_elapsed_time=-10.0, elapsed_time=-10.0;
 
 
 /* First, find out my taskid and how many tasks are running */
@@ -171,6 +172,7 @@ MPI_Status status;
       /* neighbors.  If I have the first or last grid row, then I only need */
       /*  to  communicate with one neighbor  */
       printf("Task %d received work. Beginning time steps...\n",taskid);
+      start_time = MPI_Wtime();
       iz = 0;
       for (it = 1; it <= STEPS; it++)
       {
@@ -192,6 +194,20 @@ MPI_Status status;
          update(start,end,NYPROB,&u[iz][0][0],&u[1-iz][0][0]);
          iz = 1 - iz;
       }
+      end_time = MPI_Wtime();
+   
+      local_elapsed_time = end_time - start_time;
+      if (taskid==1) {
+         elapsed_time = local_elapsed_time;
+         for (i=2; i<=numworkers; i++) {
+            MPI_Recv(&local_elapsed_time, 1, MPI_DOUBLE, i, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            if (elapsed_time < local_elapsed_time) elapsed_time = local_elapsed_time;
+         }
+         printf("Elapsed time: %e sec\n", elapsed_time);
+      }  
+      else {
+         MPI_Send(&local_elapsed_time, 1, MPI_DOUBLE, 1, 10, MPI_COMM_WORLD);
+      }      
       
       /* Finally, send my portion of final results back to master */
       MPI_Send(&offset, 1, MPI_INT, MASTER, DONE, MPI_COMM_WORLD);
