@@ -19,6 +19,8 @@
 #define CX 0.1                         /* Old struct parms */
 #define CY 0.1
 
+#define DEBUG  0                       /* Some extra messages  1: On, 0: Off */
+
 #define NUMTHREADS   10
 
 enum coordinates {SOUTH = 0, EAST, NORTH, WEST};
@@ -152,6 +154,14 @@ int main(void) {
          u[1][i][j] = 0.0;
       }
    }
+
+   #if DEBUG
+      printf("I am %d and my neighbors are North=%d, South=%d, East=%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
+      int len;
+      char processor[MPI_MAX_PROCESSOR_NAME];
+      MPI_Get_processor_name(processor, &len);
+      printf("I am %d and I am running on %s\n", my_rank, processor);
+   #endif
 
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
