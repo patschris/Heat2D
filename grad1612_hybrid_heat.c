@@ -43,8 +43,8 @@ int main(void) {
 
    /* Create 2D cartesian grid */
    periods[0] = periods[1] = 0;
-   dims[0] = GRIDX;
-   dims[1] = GRIDY;
+   dims[0] = GRIDY;
+   dims[1] = GRIDX;
    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, REORGANISATION, &comm2d);
 
    /* Find Left/West and Right/East neighBors */

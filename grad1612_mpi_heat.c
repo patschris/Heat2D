@@ -3,13 +3,13 @@
 #include "mpi.h"
 
 #define NXPROB 10                      /* x dimension of problem grid */
-#define NYPROB 10                      /* y dimension of problem grid */
+#define NYPROB 9                      /* y dimension of problem grid */
 #define STEPS 100                      /* number of time steps */
 #define MASTER 0                       /* taskid of first process */
 
 #define REORGANISATION 1               /* Reorganization of processes for cartesian grid (1: Enable, 0: Disable) */
 #define GRIDX 2
-#define GRIDY 2
+#define GRIDY 3
 
 #define CONVERGENCE 1                  /* 1: On, 0: Off */
 #define INTERVAL 10                    /* After how many rounds are we checking for convergence */
@@ -40,8 +40,8 @@ int main(void) {
 
    /* Create 2D cartesian grid */
    periods[0] = periods[1] = 0;
-   dims[0] = GRIDX;
-   dims[1] = GRIDY;
+   dims[0] = GRIDY;
+   dims[1] = GRIDX;
    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, REORGANISATION, &comm2d);
 
    /* Find Left/West and Right/East neighBors */
@@ -56,7 +56,7 @@ int main(void) {
    /* Size with extra rows and columns */
    int size_total_x = NXPROB + 2*GRIDX;
    int size_total_y = NYPROB + 2*GRIDY;
-
+   printf("I am %d and my neighbors are North=%d, South=%d, East =%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
    /* Allocate 2D contiguous arrays u[0] and u[1] (3d u) */
    /* Allocate size_total_x rows */
    if ((u[0] = malloc(size_total_x * sizeof(*u[0]))) == NULL) {
