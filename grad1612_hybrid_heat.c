@@ -225,7 +225,7 @@ int main(void) {
       
       /* Convergence check every INTERVAL iterations */
       #if CONVERGENCE
-         if ((i+1) % INTERVAL == 0) {
+         if (i % INTERVAL == 0) {
             locdiff = 0.0;
             #pragma omp for schedule(static,1) reduction(+:locdiff)
             for (i = xs[my_rank]; i < xs[my_rank]+xcell; i++)

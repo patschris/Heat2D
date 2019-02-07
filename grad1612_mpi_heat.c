@@ -200,7 +200,7 @@ int main(void) {
       
       /* Convergence check every INTERVAL iterations */
       #if CONVERGENCE
-         if ((i+1) % INTERVAL == 0) {
+         if (i % INTERVAL == 0) {
             locdiff = 0.0;
             for (i = xs[my_rank]; i < xs[my_rank]+xcell; i++)
                for (j = ys[my_rank]; j < ys[my_rank]+ycell; j++)
