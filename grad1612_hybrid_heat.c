@@ -35,6 +35,7 @@ int main(void) {
    /* Variables for clock */
    double start_time, end_time, local_elapsed_time, elapsed_time;
    #if CONVERGENCE
+      int tobreak = 0;
       float locdiff, totdiff;
    #endif
 
@@ -124,8 +125,6 @@ int main(void) {
       #pragma omp parallel for num_threads(NUMTHREADS) schedule (static,1) default(none) private(i) shared(ys)
       for (i = 0; i < GRIDX; i++) ys[i] = 1;
 
-      #pragma omp barrier
-
       #pragma omp parallel for num_threads(NUMTHREADS) collapse(2) schedule (static,1) default(none) private(i,j) shared(ys, ycell)
       for (i = 1; i < GRIDY; i++)
          for (j = 0; j < GRIDX; j++)
@@ -134,22 +133,18 @@ int main(void) {
       #pragma omp parallel for num_threads(NUMTHREADS) schedule (static,1) default(none) private(i) shared(xs)
       for (i = 0; i < GRIDY; i++) xs[i * GRIDX] = 1;
       
-      #pragma omp barrier
-
       #pragma omp parallel for num_threads(NUMTHREADS) collapse(2) schedule (static,1) default(none) private(i,j) shared(xs, xcell) 
       for (i = 1; i <= GRIDY; i++)
          for (j = 1; j < GRIDX; j++)
             xs[(i - 1) * GRIDX + j] = xs[(i - 1) * GRIDX + (j - 1)] + xcell + 2;
    }
 
-   /* Create row data type to communicate with North and South neighBors */
+   /* Create row data type to communicate with North and South neighbors */
    MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
    MPI_Type_commit(&row);
-   /* Create column data type to communicate with East and West neighBors */
+   /* Create column data type to communicate with East and West neighbors */
    MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
    MPI_Type_commit(&column);
-
-   #pragma omp barrier
 
    MPI_Bcast(xs, comm_sz, MPI_INT, 0, comm2d);
    MPI_Bcast(ys, comm_sz, MPI_INT, 0, comm2d);
@@ -167,11 +162,10 @@ int main(void) {
    }
 
    #if DEBUG
-      printf("I am %d and my neighbors are North=%d, South=%d, East=%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
       int len;
       char processor[MPI_MAX_PROCESSOR_NAME];
       MPI_Get_processor_name(processor, &len);
-      printf("I am %d and I am running on %s\n", my_rank, processor);
+      printf("I am %d and my neighbors are North=%d, South=%d, East=%d, West=%d (Running on %s)\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST], processor);
    #endif
 
    #pragma omp barrier
@@ -200,31 +194,31 @@ int main(void) {
          /* Send */
          MPI_Startall(4, recvRequest);
       }
-      
-      #pragma omp barrier
-      
-      #pragma omp parallel for schedule(static,1) collapse(2)
+            
       /* Update inner elements */
+      #pragma omp for schedule(static,1) collapse(2)
       for (i = xs[my_rank]+1; i < xs[my_rank]+xcell-1; i++)
          for (j = ys[my_rank]+1; j < ys[my_rank]+ycell-1; j++)
             u[1-iz][i][j] = u[iz][i][j] + CX*(u[iz][i+1][j] + u[iz][i-1][j] - 2.0*u[iz][i][j]) + CY*(u[iz][i][j+1] + u[iz][i][j-1] - 2.0*u[iz][i][j]);
       
-      #pragma omp barrier
       
       #pragma omp master
       MPI_Waitall(4, recvRequest, status); // wait to receive everything
       
+
+      #pragma omp barrier                 // wait the master who waits
+
       /* Update boundary elements */
 
       /* First and last row update */
-      #pragma omp parallel for schedule(static,1)
+      #pragma omp for schedule(static,1)
       for (j=ys[my_rank]; j<ys[my_rank]+ycell; j++) {
          u[1-iz][xs[my_rank]][j] = u[iz][xs[my_rank]][j] + CX*(u[iz][xs[my_rank]+1][j] + u[iz][xs[my_rank]-1][j] - 2.0*u[iz][xs[my_rank]][j]) + CY*(u[iz][xs[my_rank]][j+1] + u[iz][xs[my_rank]][j-1] - 2.0*u[iz][xs[my_rank]][j]);
          u[1-iz][xs[my_rank]+xcell-1][j] = u[iz][xs[my_rank]+xcell-1][j] + CX*(u[iz][xs[my_rank]+xcell][j] + u[iz][xs[my_rank]+xcell-2][j] - 2.0*u[iz][xs[my_rank]+xcell-1][j]) + CY*(u[iz][xs[my_rank]+xcell-1][j+1] + u[iz][xs[my_rank]+xcell-1][j-1] - 2.0*u[iz][xs[my_rank]+xcell-1][j]);
       }
       
       /* First and last column update */
-      #pragma omp parallel for schedule(static,1)
+      #pragma omp for schedule(static,1)
       for (j=xs[my_rank]+1; j<xs[my_rank]+xcell-1; j++) {
          u[1-iz][j][ys[my_rank]] = u[iz][j][ys[my_rank]] + CX*(u[iz][j+1][ys[my_rank]] + u[iz][j-1][ys[my_rank]] - 2.0*u[iz][j][ys[my_rank]]) + CY*(u[iz][j][ys[my_rank]+1] + u[iz][j][ys[my_rank]-1] - 2.0*u[iz][j][ys[my_rank]]);
          u[1-iz][j][ys[my_rank]+ycell-1] = u[iz][j][ys[my_rank]+ycell-1] + CX*(u[iz][j+1][ys[my_rank]+ycell-1] + u[iz][j-1][ys[my_rank]+ycell-1] - 2.0*u[iz][j][ys[my_rank]+ycell-1]) + CY*(u[iz][j][ys[my_rank]+ycell] + u[iz][j][ys[my_rank]+ycell-2] - 2.0*u[iz][j][ys[my_rank]+ycell-1]);
@@ -234,18 +228,17 @@ int main(void) {
       #if CONVERGENCE
          if ((i+1) % INTERVAL == 0) {
             locdiff = 0.0;
-            #pragma omp parallel for schedule(static,1) reduction(+:locdiff)
+            #pragma omp for schedule(static,1) reduction(+:locdiff)
             for (i = xs[my_rank]; i < xs[my_rank]+xcell; i++)
                for (j = ys[my_rank]; j < ys[my_rank]+ycell; j++)
                   locdiff += (u[iz][i][j] - u[1-iz][i][j])*(u[iz][i][j] - u[1-iz][i][j]); // square distance
-            
-            #pragma omp barrier
-            
+                        
             #pragma omp master
             {
                MPI_Allreduce(&locdiff, &totdiff, 1, MPI_FLOAT, MPI_SUM, comm2d);
-               if (totdiff < SENSITIVITY) break;
+               if (totdiff < SENSITIVITY) tobreak=1;
             }
+            if (tobreak) break;
          }
       #endif
       #pragma omp master
