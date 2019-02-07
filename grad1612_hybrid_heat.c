@@ -168,7 +168,6 @@ int main(void) {
       printf("I am %d and my neighbors are North=%d, South=%d, East=%d, West=%d (Running on %s)\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST], processor);
    #endif
 
-   #pragma omp barrier
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
 
