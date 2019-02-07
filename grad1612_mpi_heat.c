@@ -127,10 +127,10 @@ int main(void) {
             xs[(i - 1) * GRIDX + j] = xs[(i - 1) * GRIDX + (j - 1)] + xcell + 2;
    }
 
-   /* Create row data type to communicate with North and South neighBors */
+   /* Create row data type to communicate with North and South neighbors */
    MPI_Type_contiguous(ycell, MPI_FLOAT, &row);
    MPI_Type_commit(&row);
-   /* Create column data type to communicate with East and West neighBors */
+   /* Create column data type to communicate with East and West neighbors */
    MPI_Type_vector(xcell, 1, size_total_y, MPI_FLOAT, &column);
    MPI_Type_commit(&column);
 
@@ -149,11 +149,10 @@ int main(void) {
    }
 
    #if DEBUG
-      printf("I am %d and my neighbors are North=%d, South=%d, East=%d, West=%d\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST]);
       int len;
       char processor[MPI_MAX_PROCESSOR_NAME];
       MPI_Get_processor_name(processor, &len);
-      printf("I am %d and I am running on processor %s\n", my_rank, processor);
+      printf("I am %d and my neighbors are North=%d, South=%d, East=%d, West=%d (Running on %s)\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST], processor);
    #endif
    
    MPI_Barrier(comm2d);
