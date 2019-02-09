@@ -27,7 +27,7 @@ int main(void) {
    int i, j, k, iz, *xs, *ys, comm_sz, my_rank, neighBor[4], dims[2], periods[2];
    MPI_Comm comm2d;
    MPI_Datatype column, row;
-   MPI_Request recvRequest[4], sendRequest[4];
+   MPI_Request recvRequest[2][4], sendRequest[2][4];
    /* Variables for clock */
    double start_time, end_time, local_elapsed_time, elapsed_time;
    #if CONVERGENCE
@@ -167,27 +167,40 @@ int main(void) {
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
 
+   /* Persistent communication */
+   MPI_Send_init(&u[0][xcell][1], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[0][SOUTH]);     //send a row to south
+   MPI_Send_init(&u[1][xcell][1], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[1][SOUTH]);
+   MPI_Send_init(&u[0][1][1], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[0][NORTH]);         // send a row to north
+   MPI_Send_init(&u[1][1][1], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[1][NORTH]);
+   MPI_Send_init(&u[0][1][ycell], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[0][EAST]);    // send a column to east
+   MPI_Send_init(&u[1][1][ycell], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[1][EAST]);
+   MPI_Send_init(&u[0][1][1], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[0][WEST]);        // send a column to west
+   MPI_Send_init(&u[1][1][1], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[1][WEST]);
+
+
+   MPI_Recv_init(&u[0][0][1], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[0][NORTH]);         // receive a row from north
+   MPI_Recv_init(&u[1][0][1], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[1][NORTH]);
+   MPI_Recv_init(&u[0][xcell+1][1], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[0][SOUTH]);   //receive a row from south
+   MPI_Recv_init(&u[1][xcell+1][1], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[1][SOUTH]);
+   MPI_Recv_init(&u[0][1][0], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[0][WEST]);        //receive a column from west
+   MPI_Recv_init(&u[1][1][0], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[1][WEST]);
+   MPI_Recv_init(&u[0][1][ycell+1], 1, column, neighBor[EAST], 4, comm2d, &recvRequest[0][EAST]);  // receive a column from east
+   MPI_Recv_init(&u[1][1][ycell+1], 1, column, neighBor[EAST], 4, comm2d, &recvRequest[1][EAST]);
+   
    iz = 0;
 
    for (k = 0; k < STEPS; k++) {
-      /* Receives */
-      MPI_Irecv(&u[iz][0][1], 1, row, neighBor[NORTH], 1, comm2d, &recvRequest[NORTH]); // receive a row from north
-      MPI_Irecv(&u[iz][xcell+1][1], 1, row, neighBor[SOUTH], 2, comm2d, &recvRequest[SOUTH]); //receive a row from south
-      MPI_Irecv(&u[iz][1][0], 1, column, neighBor[WEST], 3, comm2d, &recvRequest[WEST]); //receive a column from west
-      MPI_Irecv(&u[iz][1][ycell+1], 1, column, neighBor[EAST], 4, comm2d, &recvRequest[EAST]); // receive a column from east
-      /* Sends */
-      MPI_Isend(&u[iz][xcell][1], 1, row, neighBor[SOUTH], 1, comm2d, &sendRequest[SOUTH]); //send a row to south
-      MPI_Isend(&u[iz][1][1], 1, row, neighBor[NORTH], 2, comm2d, &sendRequest[NORTH]); // send a row to north
-      MPI_Isend(&u[iz][1][ycell], 1, column, neighBor[EAST], 3, comm2d, &sendRequest[EAST]); // send a column to east
-      MPI_Isend(&u[iz][1][1], 1, column, neighBor[WEST], 4, comm2d, &sendRequest[WEST]); // send a column to west
-
+      /* Receive */
+      MPI_Startall(4, sendRequest[iz]);
+      /* Send */
+      MPI_Startall(4, recvRequest[iz]);
 
       /* Update inner elements */
       for (i = 2; i < xcell; i++)
          for (j = 2; j < ycell; j++)
             u[1-iz][i][j] = u[iz][i][j] + CX*(u[iz][i+1][j] + u[iz][i-1][j] - 2.0*u[iz][i][j]) + CY*(u[iz][i][j+1] + u[iz][i][j-1] - 2.0*u[iz][i][j]);
 
-      MPI_Waitall(4, recvRequest, MPI_STATUSES_IGNORE); // wait to receive everything
+      MPI_Waitall(4, recvRequest[iz], MPI_STATUSES_IGNORE); // wait to receive everything
       
 
       /* Update boundary elements */
@@ -217,7 +230,7 @@ int main(void) {
       #endif
       
       iz = 1-iz; // swap arrays
-      MPI_Waitall(4, sendRequest, MPI_STATUSES_IGNORE); //wait to send everything
+      MPI_Waitall(4, sendRequest[iz], MPI_STATUSES_IGNORE); //wait to send everything
    }
 
    end_time = MPI_Wtime();
