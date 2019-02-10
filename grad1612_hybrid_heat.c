@@ -3,17 +3,17 @@
 #include "mpi.h"
 #include <omp.h>
 
-#define NXPROB 10                      /* x dimension of problem grid */
-#define NYPROB 10                      /* y dimension of problem grid */
-#define STEPS 100                      /* number of time steps */
+#define NXPROB 80                      /* x dimension of problem grid */
+#define NYPROB 64                      /* y dimension of problem grid */
+#define STEPS 1000                      /* number of time steps */
 #define MASTER 0                       /* taskid of first process */
 
 #define REORGANISATION 1               /* Reorganization of processes for cartesian grid (1: Enable, 0: Disable) */
-#define GRIDX 2
-#define GRIDY 2
+#define GRIDX 1
+#define GRIDY 1
 
-#define CONVERGENCE 1                  /* 1: On, 0: Off */
-#define INTERVAL 10                    /* After how many rounds are we checking for convergence */
+#define CONVERGENCE 0                 /* 1: On, 0: Off */
+#define INTERVAL 20                    /* After how many rounds are we checking for convergence */
 #define SENSITIVITY 0.1                /* Convergence's sensitivity (EPSILON) */
 
 #define CX 0.1                         /* Old struct parms */
@@ -106,7 +106,7 @@ int main(void) {
 
    if (my_rank == MASTER) {
       if (comm_sz != GRIDX * GRIDY) {
-         printf("ERROR: the number of tasks must be equal to %d.\nQuiting...\n", GRIDX*GRIDY);
+         printf("ERROR: constants GRIDX x GRIDY = %d x %d not equal to %d.\nQuiting...\n", GRIDX, GRIDY, comm_sz);
          MPI_Abort(MPI_COMM_WORLD, 1);
          exit(1);
       }
@@ -116,7 +116,10 @@ int main(void) {
          exit(1);
       }
       else {
-         printf("Starting with %d processes\nProblem size:%dx%d\nEach process will take: %dx%d\n", comm_sz, NXPROB, NYPROB, xcell, ycell);
+         printf("Starting with %d processes\nProblem size:%dx%d\nEach process will take: %dx%d\nIterations:%d\n", comm_sz, NXPROB, NYPROB, xcell, ycell, STEPS);
+         #if CONVERGENCE
+            printf("Check for convergence every %d iterations\n", INTERVAL);
+         #endif
       }
 
       /* Compute the coordinates of the top left cell of the array that takes each worker */
@@ -268,7 +271,7 @@ int main(void) {
    
    local_elapsed_time = end_time - start_time;
    MPI_Reduce(&local_elapsed_time, &elapsed_time, 1, MPI_DOUBLE, MPI_MAX, MASTER, comm2d);
-   if (my_rank == MASTER) printf("Elapsed time: %e sec\n", elapsed_time);
+   if (my_rank == MASTER) printf("Exitig after %d iterations\nElapsed time: %e sec\n", k, elapsed_time);
 
    /* Free all arrays */
    free(xs);
