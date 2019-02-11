@@ -2,14 +2,14 @@
 #include <stdlib.h>
 #include "mpi.h"
 
-#define NXPROB 5120                      /* x dimension of problem grid */
-#define NYPROB 4096                      /* y dimension of problem grid */
-#define STEPS 1000                      /* number of time steps */
+#define NXPROB 10                      /* x dimension of problem grid */
+#define NYPROB 10                      /* y dimension of problem grid */
+#define STEPS 100                      /* number of time steps */
 #define MASTER 0                       /* taskid of first process */
 
 #define REORGANISATION 1               /* Reorganization of processes for cartesian grid (1: Enable, 0: Disable) */
-#define GRIDX 16
-#define GRIDY 8
+#define GRIDX 2
+#define GRIDY 2
 
 #define CONVERGENCE 1                 /* 1: On, 0: Off */
 #define INTERVAL 20                    /* After how many rounds are we checking for convergence */
@@ -20,13 +20,17 @@
 
 #define DEBUG  0                     /* Some extra messages  1: On, 0: Off */
 
+float readfloat(FILE *);
+
 enum coordinates {SOUTH = 0, EAST, NORTH, WEST};
 
 int main(void) {
    float **u[2];
-   int i, j, k, iz, *xs, *ys, comm_sz, my_rank, neighBor[4], dims[2], periods[2];
+   FILE *fs, *fd;
+   int i, j, k, iz, *xs, *ys, comm_sz, my_rank, neighBor[4], gsizes[2], lsizes[2], start_indices[2], memsizes[2];
+   MPI_File fh;
    MPI_Comm comm2d;
-   MPI_Datatype column, row;
+   MPI_Datatype column, row, filetype, memtype;
    MPI_Request recvRequest[2][4], sendRequest[2][4];
    /* Variables for clock */
    double start_time, end_time, local_elapsed_time, elapsed_time;
@@ -40,9 +44,8 @@ int main(void) {
    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
    /* Create 2D cartesian grid */
-   periods[0] = periods[1] = 0;
-   dims[0] = GRIDY;
-   dims[1] = GRIDX;
+   int periods[2] = {0,0};
+   int dims[2] = {GRIDY, GRIDX};
    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, REORGANISATION, &comm2d);
 
    /* Find Left/West and Right/East neighBors */
@@ -169,6 +172,40 @@ int main(void) {
       printf("I am %d and my neighbors are North=%d, South=%d, East=%d, West=%d (Running on %s)\n", my_rank, neighBor[NORTH], neighBor[SOUTH], neighBor[EAST], neighBor[WEST], processor);
    #endif
 
+   /* Parallel I/O initial.dat */
+   MPI_File_open(MPI_COMM_WORLD, "initial_binary.dat", MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
+	gsizes[0] = NXPROB;
+	gsizes[1] = NYPROB;
+	lsizes[0] = xcell;
+	lsizes[1] = ycell;
+	start_indices[0] = xs[my_rank];
+	start_indices[1] = ys[my_rank];
+	MPI_Type_create_subarray(2, gsizes, lsizes, start_indices,MPI_ORDER_C, MPI_FLOAT, &filetype);
+	MPI_Type_commit(&filetype);
+	MPI_File_set_view(fh, 0, MPI_FLOAT, filetype, "native", MPI_INFO_NULL);
+	memsizes[0] = block_x;
+	memsizes[1] = block_y;
+	start_indices[0] = start_indices[1] = 1;
+	MPI_Type_create_subarray(2, memsizes, lsizes, start_indices,MPI_ORDER_C, MPI_FLOAT, &memtype);
+	MPI_Type_commit(&memtype);
+	MPI_File_write_all(fh, &(u[0][0][0]), 1, memtype, MPI_STATUS_IGNORE);
+	MPI_File_close(&fh);
+   if (my_rank == MASTER) {
+      printf ("Writing initial.dat ...\n");
+		FILE *fs, *fd;
+		fs = fopen("initial_binary.dat","rb");
+      fd = fopen("initial.dat","w");
+		for (i = 0; i < NXPROB; i++) {
+         for (j=0;j< NYPROB;j++){
+            fprintf(fd, "%6.1f ", readfloat(fs));        
+         } 
+         fprintf(fd, "\n");
+      }
+      fclose(fs);
+      fclose(fd);
+	}
+
+
    MPI_Barrier(comm2d);
    start_time = MPI_Wtime();
 
@@ -244,7 +281,25 @@ int main(void) {
    
    local_elapsed_time = end_time - start_time;
    MPI_Reduce(&local_elapsed_time, &elapsed_time, 1, MPI_DOUBLE, MPI_MAX, MASTER, comm2d);
-   if (my_rank == MASTER) printf("Exitig after %d iterations\nElapsed time: %e sec\n", k, elapsed_time);
+   
+   /* Parallel I/O final.dat */
+   MPI_File_open(MPI_COMM_WORLD, "final_binary.dat", MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
+   MPI_File_write_all(fh, &(u[0][0][0]), 1, memtype, MPI_STATUS_IGNORE);
+	MPI_File_close(&fh);
+   if (my_rank == MASTER) {
+      printf("Exitig after %d iterations\nElapsed time: %e sec\nWriting final.dat ...\n", k, elapsed_time);
+		fs = fopen("final_binary.dat","rb");
+      fd = fopen("final.dat","w");
+		for (i = 0; i < NXPROB; i++) {
+         for (j=0;j< NYPROB;j++){
+            fprintf(fd, "%6.1f ", readfloat(fs));        
+         } 
+         fprintf(fd, "\n");
+      }
+      fclose(fs);
+      fclose(fd);
+	}
+
    /* Free all arrays */
    free(xs);
    free(ys);
@@ -256,7 +311,16 @@ int main(void) {
    /* Free datatypes */
    MPI_Type_free(&row);
    MPI_Type_free(&column);
+   MPI_Type_free(&filetype);
+   MPI_Type_free(&memtype);
 
    MPI_Finalize();
    return 0;
+}
+
+/* Read a float from binary file */
+float readfloat(FILE *f) {
+  float v;
+  fread((void*)(&v), sizeof(v), 1, f);
+  return v;
 }
