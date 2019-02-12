@@ -5,7 +5,7 @@
 
 #define NXPROB 10                      /* x dimension of problem grid */
 #define NYPROB 10                      /* y dimension of problem grid */
-#define STEPS 1                        /* number of time steps */
+#define STEPS 100                        /* number of time steps */
 #define MASTER 0                       /* taskid of first process */
 
 #define REORGANISATION 1               /* Reorganization of processes for cartesian grid (1: Enable, 0: Disable) */
@@ -253,7 +253,7 @@ int main(void) {
       #pragma omp barrier // wait the master
 
       /* Update inner elements */
-      #pragma omp for schedule(static,1) collapse(2)
+      #pragma omp parallel for schedule(static,1) collapse(2) default(none) private(i,j) shared (u, iz, xcell, ycell)
       for (i = 2; i < xcell; i++)
          for (j = 2; j < ycell; j++)
             u[1-iz][i][j] = u[iz][i][j] + CX*(u[iz][i+1][j] + u[iz][i-1][j] - 2.0*u[iz][i][j]) + CY*(u[iz][i][j+1] + u[iz][i][j-1] - 2.0*u[iz][i][j]);
@@ -267,14 +267,14 @@ int main(void) {
       /* Update boundary elements */
 
       /* First and last row update */
-      #pragma omp for schedule(static,1)
+      #pragma omp parallel for schedule(static,1) default(none) private(j) shared (u, iz, xcell, ycell)
       for (j=1; j<ycell+1; j++) {
          u[1-iz][1][j] = u[iz][1][j] + CX*(u[iz][2][j] + u[iz][0][j] - 2.0*u[iz][1][j]) + CY*(u[iz][1][j+1] + u[iz][1][j-1] - 2.0*u[iz][1][j]);
          u[1-iz][xcell][j] = u[iz][xcell][j] + CX*(u[iz][xcell+1][j] + u[iz][xcell-1][j] - 2.0*u[iz][xcell][j]) + CY*(u[iz][xcell][j+1] + u[iz][xcell][j-1] - 2.0*u[iz][xcell][j]);
       }
       
       /* First and last column update */
-      #pragma omp for schedule(static,1) 
+      #pragma omp parallel for schedule(static,1) default(none) private(j) shared (u, iz, xcell, ycell)
       for (j=2; j<xcell; j++) {
          u[1-iz][j][1] = u[iz][j][1] + CX*(u[iz][j+1][1] + u[iz][j-1][1] - 2.0*u[iz][j][1]) + CY*(u[iz][j][2] + u[iz][j][0] - 2.0*u[iz][j][1]);
          u[1-iz][j][ycell] = u[iz][j][ycell] + CX*(u[iz][j+1][ycell] + u[iz][j-1][ycell] - 2.0*u[iz][j][ycell]) + CY*(u[iz][j][ycell+1] + u[iz][j][ycell-1] - 2.0*u[iz][j][ycell]);
@@ -284,7 +284,7 @@ int main(void) {
       #if CONVERGENCE
          if (i % INTERVAL == 0) {
             locdiff = 0.0;
-            #pragma omp for schedule(static,1) collapse(2) reduction(+:locdiff)
+            #pragma omp parallel for schedule(static,1) collapse(2) default(none) private(i,j) shared (u, iz, xcell, ycell) reduction(+:locdiff)
             for (i = 1; i < xcell+1; i++)
                for (j = 1; j < ycell+1; j++)
                   locdiff += (u[iz][i][j] - u[1-iz][i][j])*(u[iz][i][j] - u[1-iz][i][j]); // square distance
