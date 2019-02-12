@@ -43,6 +43,30 @@ int main(void) {
    MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
+   /* Size of each cell */
+   int xcell = NXPROB / GRIDX;
+   int ycell = NYPROB / GRIDY;
+
+   /* Size with extra rows and columns */
+   int block_x = xcell + 2;
+   int block_y = ycell + 2;
+
+   if (my_rank == MASTER) {
+      if (comm_sz != GRIDX * GRIDY) {
+         printf("ERROR: the number of tasks must be equal to %d.\nQuiting...\n", GRIDX*GRIDY);
+         MPI_Abort(MPI_COMM_WORLD, 1);
+         exit(1);
+      }
+      else if (NXPROB % GRIDX || NYPROB % GRIDY) {
+         printf("ERROR: (%d/%d) or (%d/%d) is not an integer\nQuiting...\n", NXPROB, GRIDX, NYPROB, GRIDY);
+         MPI_Abort(MPI_COMM_WORLD, 1);
+         exit(1);
+      }
+      else {
+         printf("Starting with %d processes\nProblem size:%dx%d\nEach process will take: %dx%d\n", comm_sz, NXPROB, NYPROB, xcell, ycell);
+      }
+   }
+
    /* Create 2D cartesian grid */
    int periods[2] = {0,0};
    int dims[2] = {GRIDY, GRIDX};
@@ -52,14 +76,6 @@ int main(void) {
    MPI_Cart_shift(comm2d, 0, 1, &neighBor[WEST], &neighBor[EAST]);
    /* Find Bottom/South and Upper/North neighBors */
    MPI_Cart_shift(comm2d, 1, 1, &neighBor[NORTH], &neighBor[SOUTH]);
-
-   /* Size of each cell */
-   int xcell = NXPROB / GRIDX;
-   int ycell = NYPROB / GRIDY;
-
-   /* Size with extra rows and columns */
-   int block_x = xcell + 2;
-   int block_y = ycell + 2;
 
    /* Allocate 2D contiguous arrays u[0] and u[1] (3d u) */
    /* Allocate block_x rows */
@@ -104,23 +120,6 @@ int main(void) {
    }
 
    if (my_rank == MASTER) {
-      if (comm_sz != GRIDX * GRIDY) {
-         printf("ERROR: constants GRIDX x GRIDY = %d x %d not equal to %d.\nQuiting...\n", GRIDX, GRIDY, comm_sz);
-         MPI_Abort(MPI_COMM_WORLD, 1);
-         exit(1);
-      }
-      else if (NXPROB % GRIDX || NYPROB % GRIDY) {
-         printf("ERROR: (%d/%d) or (%d/%d) is not an integer\nQuiting...\n", NXPROB, GRIDX, NYPROB, GRIDY);
-         MPI_Abort(MPI_COMM_WORLD, 1);
-         exit(1);
-      }
-      else {
-         printf("Starting with %d processes\nProblem size:%dx%d\nEach process will take: %dx%d\nIterations:%d\n", comm_sz, NXPROB, NYPROB, xcell, ycell, STEPS);
-         #if CONVERGENCE
-            printf("Check for convergence every %d iterations\n", INTERVAL);
-         #endif
-      }
-
       /* Compute the coordinates of the top left cell of the array that takes each worker */
       for (i = 0; i < GRIDX; i++)
          ys[i] = 0;
