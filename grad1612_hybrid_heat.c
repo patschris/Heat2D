@@ -67,8 +67,7 @@ int main(void) {
          exit(1);
       }
       else {
-         printf("Starting with %d processes and %d threads\nProblem size:%dx%d\nEach process will take: %dx%d\n", comm_sz, NUMTHREADS, NXPROB, NYPROB, xcell, ycell);
-         printf("Amount of iterations: %d\n", STEPS);
+         printf("Starting with %d processes and %d threads\nProblem size:%dx%d\nEach process will take: %dx%d\nAmount of iterations: %d\n", comm_sz, NUMTHREADS, NXPROB, NYPROB, xcell, ycell, STEPS);
          #if CONVERGENCE
             printf("Check for convergence every %d iterations\n", INTERVAL);
          #endif
@@ -313,7 +312,7 @@ int main(void) {
    
    /* Parallel I/O final.dat */
    MPI_File_open(comm2d, "final_binary.dat", MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
-   MPI_File_write_all(fh, &(u[0][0][0]), 1, memtype, MPI_STATUS_IGNORE);
+   MPI_File_write_all(fh, &(u[iz][0][0]), 1, memtype, MPI_STATUS_IGNORE);
 	MPI_File_close(&fh);
    if (my_rank == MASTER) {
       printf("Exiting after %d iterations\nElapsed time: %e sec\nWriting final.dat ...\n", count, elapsed_time);
