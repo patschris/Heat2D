@@ -3,15 +3,14 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
-#define NXPROB 640                       /* x dimension of problem grid */
-#define NYPROB 512                       /* y dimension of problem grid */
-#define STEPS 100000                    /* number of time steps */
+#define NXPROB 80                       /* x dimension of problem grid */
+#define NYPROB 64                       /* y dimension of problem grid */
+#define STEPS 100                    /* number of time steps */
 #define CX 0.1                          /* Old struct parms */
 #define CY 0.1
 #define DEBUG  0                        /* Some extra messages  1: On, 0: Off */
 #define BLOCK_SIZE_X 8                  /* Block size (x-dimension) */
 #define BLOCK_SIZE_Y 8                  /* Block size (y-dimension)  */
-
 
 #define SIZE (NXPROB*NYPROB)
 
@@ -23,12 +22,10 @@
 
 #define FRACTION_CEILING(numerator, denominator) ((numerator+denominator-1)/denominator)
 
-
 /* Useful GPU */
 void detailsGPU () {
     int devCount;
-    const int kb = 1024;
-    const int mb = kb * kb;
+    const int kb = 1024, mb = kb * kb;
     cudaGetDeviceCount(&devCount);
     for (int i = 0; i < devCount; i++) {
         cudaDeviceProp props;
@@ -41,34 +38,34 @@ void detailsGPU () {
     }
 }
 
-__global__ void print (float *u, int iz) {
+__global__ void print (float * __restrict__ u) {
     for (int i =0; i<NXPROB; i++) {
         for (int j=0; j<NYPROB; j++)
-            printf("%6.2f ", u[iz*SIZE + i*NYPROB + j]);
+            printf("%6.2f ", u[i*NYPROB + j]);
         printf("\n");
     }
 }
 
 /* Array initialization */
-__global__ void inidat(float  *u, int iz) {
+__global__ void inidat(float  * __restrict__ u) {
 	const int ix = blockIdx.x * blockDim.x + threadIdx.x;
     const int iy = blockIdx.y * blockDim.y + threadIdx.y;
     if (ix>=0 && ix<NXPROB && iy>=0 && iy<NYPROB)
-        u[iz*SIZE + ix*NYPROB + iy] =  (float)(ix * (NXPROB - ix - 1) * iy * (NYPROB - iy - 1));
+        u[ix*NYPROB + iy] =  (float)(ix * (NXPROB - ix - 1) * iy * (NYPROB - iy - 1));
 }
 
-__global__ void update (float * __restrict__ u, int iz) {
+__global__ void update(const float * __restrict__ src, float * __restrict__ dst){
 	const int ix = blockIdx.x * blockDim.x + threadIdx.x;
-	const int iy = blockIdx.y * blockDim.y + threadIdx.y;	
+	const int iy = blockIdx.y * blockDim.y + threadIdx.y;
 	if (ix>0 && ix<NXPROB-1 && iy>0 && iy<NYPROB-1)
-        u[(1-iz)*SIZE + ix*NYPROB+iy] = u[iz*SIZE + ix*NYPROB + iy]  + 
-            CX * (u[iz*SIZE + (ix+1)*NYPROB + iy] + u[iz*SIZE + (ix-1)*NYPROB + iy] - 2.0 * u[iz*SIZE + ix*NYPROB + iy]) +
-            CY * (u[iz*SIZE + ix*NYPROB + iy+1] + u[iz*SIZE + ix*NYPROB + iy-1] - 2.0 * u[iz*SIZE + ix*NYPROB + iy]);
+        dst[ix*NYPROB+iy] = src[ix*NYPROB+iy] + 
+            CX * (src[(ix+1)*NYPROB + iy] + src[(ix-1)*NYPROB + iy] - 2.0 * src[ix*NYPROB + iy]) +
+            CY * (src[ix*NYPROB + iy+1] + src[ix*NYPROB + iy-1] - 2.0 * src[ix*NYPROB + iy]);
 }
 
-int main(void) {
-    int k, iz;
-    float *u, t;
+int main (void) {
+    int k;
+    float *u0, *u1, t;
     cudaEvent_t start, stop;
     dim3 dimBlock(BLOCK_SIZE_X, BLOCK_SIZE_Y);
 	dim3 dimGrid (FRACTION_CEILING(NXPROB, BLOCK_SIZE_X), FRACTION_CEILING(NYPROB, BLOCK_SIZE_Y));
@@ -76,22 +73,22 @@ int main(void) {
         detailsGPU ();
     #endif
     printf("Problem size: %dx%d\nAmount of iterations: %d\n", NXPROB, NYPROB, STEPS);
-    CUDA_SAFE_CALL(cudaMalloc((void**)&u,  2 * NXPROB * NYPROB * sizeof(float)));
-    CUDA_SAFE_CALL(cudaMemset(u, 0,  2 * NXPROB * NYPROB * sizeof(float)));
-    inidat<<<dimGrid, dimBlock>>>(u,0);
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start, 0);
-    iz = 0;
-    for (k=0; k<STEPS; k++) {
-        update<<<dimGrid, dimBlock>>>(u, iz);
-        cudaDeviceSynchronize();
-        iz = 1-iz;
-    }     
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&t, start, stop);
+    CUDA_SAFE_CALL(cudaMalloc((void**)&u0,  NXPROB * NYPROB * sizeof(float)));
+    CUDA_SAFE_CALL(cudaMalloc((void**)&u1,  NXPROB * NYPROB * sizeof(float)));
+    inidat<<<dimGrid, dimBlock>>>(u0);
+    CUDA_SAFE_CALL(cudaMemset(u1, 0, NXPROB * NYPROB * sizeof(float)));
+    CUDA_SAFE_CALL(cudaEventCreate(&start));
+    CUDA_SAFE_CALL(cudaEventCreate(&stop));
+    CUDA_SAFE_CALL(cudaEventRecord(start, 0));
+    for (k=0; k<STEPS; k=k+2) {
+        update<<<dimGrid, dimBlock>>>(u0, u1);
+        update<<<dimGrid, dimBlock>>>(u1, u0);
+    }  
+    CUDA_SAFE_CALL(cudaEventRecord(stop, 0));
+    CUDA_SAFE_CALL(cudaEventSynchronize(stop));
+    CUDA_SAFE_CALL(cudaEventElapsedTime(&t, start, stop));
     printf("Elapsed time: %e sec\n", t/1000);
-    CUDA_SAFE_CALL(cudaFree(u));
+    CUDA_SAFE_CALL(cudaFree(u0));
+    CUDA_SAFE_CALL(cudaFree(u1));
     return 0;
 }
