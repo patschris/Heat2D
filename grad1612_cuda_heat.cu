@@ -3,8 +3,8 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
-#define NXPROB 80                       /* x dimension of problem grid */
-#define NYPROB 64                       /* y dimension of problem grid */
+#define NXPROB 2560                       /* x dimension of problem grid */
+#define NYPROB 2048                       /* y dimension of problem grid */
 #define STEPS 100                    /* number of time steps */
 #define CX 0.1                          /* Old struct parms */
 #define CY 0.1
@@ -90,5 +90,6 @@ int main (void) {
     printf("Elapsed time: %e sec\n", t/1000);
     CUDA_SAFE_CALL(cudaFree(u0));
     CUDA_SAFE_CALL(cudaFree(u1));
+    CUDA_SAFE_CALL(cudaDeviceReset());
     return 0;
 }
