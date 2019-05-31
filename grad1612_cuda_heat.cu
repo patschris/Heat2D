@@ -3,16 +3,14 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
-#define NXPROB 2560                       /* x dimension of problem grid */
-#define NYPROB 2048                       /* y dimension of problem grid */
-#define STEPS 100                    /* number of time steps */
+#define NXPROB 640                       /* x dimension of problem grid */
+#define NYPROB 1024                       /* y dimension of problem grid */
+#define STEPS 10000                    /* number of time steps */
 #define CX 0.1                          /* Old struct parms */
 #define CY 0.1
 #define DEBUG  0                        /* Some extra messages  1: On, 0: Off */
-#define BLOCK_SIZE_X 8                  /* Block size (x-dimension) */
-#define BLOCK_SIZE_Y 8                  /* Block size (y-dimension)  */
-
-#define SIZE (NXPROB*NYPROB)
+#define BLOCKX 8                  /* Block size (x-dimension) */
+#define BLOCKY 8                  /* Block size (y-dimension)  */
 
 #define CUDA_SAFE_CALL(call) {                                    \
     cudaError err = call;                                                    \
@@ -67,12 +65,13 @@ int main (void) {
     int k;
     float *u0, *u1, t;
     cudaEvent_t start, stop;
-    dim3 dimBlock(BLOCK_SIZE_X, BLOCK_SIZE_Y);
-	dim3 dimGrid (FRACTION_CEILING(NXPROB, BLOCK_SIZE_X), FRACTION_CEILING(NYPROB, BLOCK_SIZE_Y));
+    dim3 dimBlock(BLOCKX, BLOCKY);
+    dim3 dimGrid (FRACTION_CEILING(NXPROB, BLOCKX), FRACTION_CEILING(NYPROB, BLOCKY));
     #if DEBUG
         detailsGPU ();
     #endif
     printf("Problem size: %dx%d\nAmount of iterations: %d\n", NXPROB, NYPROB, STEPS);
+
     CUDA_SAFE_CALL(cudaMalloc((void**)&u0,  NXPROB * NYPROB * sizeof(float)));
     CUDA_SAFE_CALL(cudaMalloc((void**)&u1,  NXPROB * NYPROB * sizeof(float)));
     inidat<<<dimGrid, dimBlock>>>(u0);
@@ -81,9 +80,9 @@ int main (void) {
     CUDA_SAFE_CALL(cudaEventCreate(&stop));
     CUDA_SAFE_CALL(cudaEventRecord(start, 0));
     for (k=0; k<STEPS; k=k+2) {
-        update<<<dimGrid, dimBlock>>>(u0, u1);
         update<<<dimGrid, dimBlock>>>(u1, u0);
-    }  
+        update<<<dimGrid, dimBlock>>>(u0, u1);
+    } 
     CUDA_SAFE_CALL(cudaEventRecord(stop, 0));
     CUDA_SAFE_CALL(cudaEventSynchronize(stop));
     CUDA_SAFE_CALL(cudaEventElapsedTime(&t, start, stop));
