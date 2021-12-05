@@ -13,3 +13,7 @@
 ### MPI + OpenMP (Hybrid)
 `mpicc -g -Wall -fopenmp -o grad1612_hybrid_heat grad1612_hybrid_heat.c` <br/>
 `mpiexec -n 4 ./grad1612_hybrid_heat`
+
+### CUDA
+`nvcc grad1612_cuda_heat.cu -o grad1612_cuda_heat` <br/>
+`./grad1612_cuda_heat`
